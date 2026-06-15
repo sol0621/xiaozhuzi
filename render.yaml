@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: homework-assistant
+    env: python
+    region: singapore
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: LLM_BASE_URL
+        sync: false
+      - key: LLM_API_KEY
+        sync: false
+      - key: LLM_MODEL
+        sync: false
+      - key: BAIDU_OCR_APP_ID
+        sync: false
+      - key: BAIDU_OCR_API_KEY
+        sync: false
+      - key: BAIDU_OCR_SECRET_KEY
+        sync: false
+      - key: ENABLE_OCR
+        sync: false
