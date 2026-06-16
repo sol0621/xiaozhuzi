@@ -81,12 +81,17 @@
           <template v-else-if="q.status==='answer_unclear'">
             <div class="card-header warn">第 {{ q.id }} 题 ⚠️ 答案待确认</div>
             <div class="question-content">{{ q.content }}</div>
+            <div v-if="q.correctAnswer || q.studentAnswer" class="ai-suggestion">
+              <div class="suggestion-label">🤖 AI推断的正确配对（供参考）：</div>
+              <div class="suggestion-content">{{ q.correctAnswer || q.studentAnswer }}</div>
+            </div>
             <div class="input-line">
-              <label>请输入孩子的答案：</label>
-              <input v-model="q.tempAnswer" class="small-input" />
+              <label>请输入孩子的答案（或点击上方AI答案一键填入）：</label>
+              <input v-model="q.tempAnswer" class="small-input" :placeholder="q.correctAnswer || q.studentAnswer || '例如：仙人掌-叶刺-沙漠'" />
             </div>
             <div class="actions-row">
               <button class="btn-small" @click="confirmAnswer(q)">✅ 确认答案</button>
+              <button v-if="q.correctAnswer || q.studentAnswer" class="btn-small" @click="q.tempAnswer = (q.correctAnswer || q.studentAnswer); confirmAnswer(q)">✨ 采纳AI答案</button>
               <button class="btn-small ghost" @click="skipQuestion(q)">⏭️ 跳过此题</button>
             </div>
           </template>
@@ -215,6 +220,9 @@ function formatText(t) { return (t||'').replace(/\n/g,'<br>') }
 .card-header.warn { color:#F5A623; font-weight:600; }
 .card-header.muted { color:#999; }
 .question-content { font-size:15px; font-weight:600; color:#333; margin-bottom:8px; line-height:1.5; }
+.ai-suggestion { background:#F0F7FF; border:1px solid #B8D4F0; border-radius:8px; padding:10px 12px; margin:8px 0; }
+.suggestion-label { font-size:12px; color:#4A90D9; margin-bottom:4px; font-weight:600; }
+.suggestion-content { font-size:14px; color:#333; white-space:pre-wrap; line-height:1.6; }
 .answer-line { font-size:13px; color:#666; margin-bottom:6px; }
 .badge { display:inline-block; padding:3px 8px; border-radius:4px; font-size:12px; font-weight:600; margin-top:4px; }
 .badge.correct { background:#E6F4EA; color:#1E8E3E; }

@@ -91,7 +91,8 @@ def get_system_prompt(grade: int, subject: str) -> str:
 
 注意：
 - 每道题status只能是"normal""answer_unclear""partial_recognition""unrecognizable"。
-- 优先status为normal；答案模糊时标记answer_unclear并尽量给出content。
+- 优先status为normal；答案模糊时标记answer_unclear并务必填充correctAnswer或studentAnswer（基于学科知识的最佳推断）。
+- 连线/配对题的correctAnswer格式："A→X, B→Y, C→Z" 或 "1-c, 2-a, 3-b"，清晰列出配对关系。
 - 整页无有效题目返回mode="error"，questions为空。
 - 直接解答模式的explanation请用中文分步讲解，符合年级铁律。"""
 
