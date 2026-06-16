@@ -11,3 +11,10 @@ async def init_db():
     from models import Base
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        # 迁移：为现有 homework_records 表添加 not_attempted_count 列（如果不存在）
+        try:
+            await conn.exec_driver_sql(
+                "ALTER TABLE homework_records ADD COLUMN not_attempted_count INTEGER DEFAULT 0"
+            )
+        except Exception:
+            pass  # 列已存在则忽略

@@ -12,6 +12,7 @@ class HomeworkRecord(Base):
     total_count = Column(Integer, default=0)
     correct_count = Column(Integer, default=0)
     wrong_count = Column(Integer, default=0)
+    not_attempted_count = Column(Integer, default=0)
     created_at = Column(DateTime, server_default=func.now())
 
 class ProblemRecord(Base):

@@ -73,20 +73,22 @@ def get_system_prompt(grade: int, subject: str) -> str:
 4. 禁止使用成人社交俚语/网络黑话。
 5. 数学禁止计算器思维，必须展示手算步骤。
 
-批改规则：
-- 如果每道题都有明确的"答案/结果/=数字"，则进入【批改模式】，判断每题对错。
-- 如果只有算式/题干没有答案（裸算式），则进入【直接解答模式】。
+批改规则（逐题判断）：
+- 每道题独立检查：是否有学生答案/解题过程。
+- 有学生答案 → 判断对错，status设为"normal"（必须包含isCorrect字段）。
+- 没有学生答案（空白、只有题目未作答） → status设为"not_attempted"，不设isCorrect，但要给出explanation和finalAnswer（相当于帮你解答这道没做的题）。
 - 即使只有单个单词/句子，也尽量识别为题目——不到万不得已不要返回error。英文一个单词也是题目(如"apple")。
+- 模式统一用mode="correction"，不要单独用direct-answer。即使全部未答题也用correction。
 
 输出格式要求（必须是合法JSON，不要markdown代码块）：
-批改模式：{{"mode":"correction","questions":[{{"id":1,"content":"题目原文","studentAnswer":"学生答案","isCorrect":true/false,"wrongReason":"错误原因，仅错题","errorType":"错误类型标签如'计算错误'/'概念混淆'","status":"normal"}}]}}
-直接解答模式：{{"mode":"direct-answer","questions":[{{"id":1,"content":"题目原文","explanation":"分步解答过程","finalAnswer":"最终答案","status":"normal"}}]}}
+{{"mode":"correction","questions":[{{"id":1,"content":"题目原文","studentAnswer":"学生写的答案","isCorrect":true,"status":"normal"}},{{"id":2,"content":"题目原文","studentAnswer":"学生写的错误答案","isCorrect":false,"wrongReason":"具体错误原因","errorType":"错误类型标签如'计算错误'/'概念混淆'","status":"normal"}},{{"id":3,"content":"题目原文（无答案）","studentAnswer":"","status":"not_attempted","explanation":"分步解答过程","finalAnswer":"最终答案"}}]}}
 
 注意：
-- 每道题status只能是"normal""answer_unclear""partial_recognition""unrecognizable"。
-- 优先status为normal；答案模糊时标记answer_unclear并尽量给出content。
+- status可为："normal"（已作答）、"not_attempted"（未答题）、"answer_unclear"（答案模糊）、"partial_recognition"（题目不完整）、"unrecognizable"（无法识别）。
+- not_attempted题目必须有explanation和finalAnswer，不需要isCorrect/wrongReason/errorType。
+- normal题目必须有isCorrect字段。
 - 整页无有效题目返回mode="error"，questions为空。
-- 直接解答模式的explanation请用中文分步讲解，符合年级铁律。"""
+- 解答用中文分步讲解，符合年级铁律。"""
 
 def get_explain_prompt(grade: int, subject: str, question: str, student_answer: str, correct_answer: str, wrong_reason: str) -> str:
     rule = GRADE_RULES.get(grade, {}).get(subject, "")
@@ -198,10 +200,17 @@ async def correct(
         return {"success": True, "data": {"mode": "error", "totalCount": 0, "questions": []}}
 
     total = len(questions)
-    if mode == "correction":
-        correct = sum(1 for q in questions if q.get("isCorrect"))
-        wrong = total - correct
-        result_data = {"mode": "correction", "totalCount": total, "correctCount": correct, "wrongCount": wrong, "questions": questions}
+    not_attempted = sum(1 for q in questions if q.get("status") == "not_attempted")
+    if mode == "correction" or (mode not in ("direct-answer", "error")):
+        correct = sum(1 for q in questions if q.get("isCorrect") and q.get("status") == "normal")
+        wrong = sum(1 for q in questions if not q.get("isCorrect") and q.get("status") == "normal")
+        # 全对判断：所有normal题都正确，且没有答案模糊/异常状态题，not_attempted不影响
+        if correct == (total - not_attempted) and wrong == 0 and total > 0 and \
+           all(q.get("status") in ("normal", "not_attempted") for q in questions) and \
+           correct > 0:
+            result_data = {"mode": "all_correct", "totalCount": total, "correctCount": correct, "wrongCount": 0, "notAttemptedCount": not_attempted, "questions": questions}
+        else:
+            result_data = {"mode": "correction", "totalCount": total, "correctCount": correct, "wrongCount": wrong, "notAttemptedCount": not_attempted, "questions": questions}
     elif mode == "direct-answer":
         result_data = {"mode": "direct-answer", "totalCount": total, "questions": questions}
     else:
@@ -220,13 +229,14 @@ async def correct(
                 total_count=result_data.get("totalCount", 0),
                 correct_count=result_data.get("correctCount", 0),
                 wrong_count=result_data.get("wrongCount", 0),
+                not_attempted_count=result_data.get("notAttemptedCount", 0),
             )
             session.add(record)
             await session.flush()
-            if result_data["mode"] == "correction":
+            if result_data["mode"] in ("correction", "all_correct"):
                 for q in questions:
                     if q.get("status") != "normal":
-                        continue
+                        continue  # 跳过 not_attempted/answer_unclear/partial_recognition/unrecognizable
                     session.add(ProblemRecord(
                         homework_id=record.id,
                         question_content=str(q.get("content", ""))[:500],
