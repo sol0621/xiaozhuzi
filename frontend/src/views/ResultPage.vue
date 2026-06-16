@@ -72,6 +72,11 @@
           <template v-if="q.status==='normal'">
             <div class="card-header">第 {{ q.id }} 题</div>
             <div class="question-content">{{ q.content }}</div>
+            <MatchingDiagram
+              v-if="isMatchingQuestion(q) && q.studentAnswer"
+              :correctAnswer="q.correctAnswer"
+              :studentAnswer="q.studentAnswer"
+            />
             <div v-if="q.studentAnswer" class="answer-line">孩子答案：{{ q.studentAnswer }}</div>
             <div :class="['badge', q.isCorrect?'correct':'wrong']">{{ q.isCorrect ? '✅ 正确' : '❌ 错误' }}</div>
             <div v-if="!q.isCorrect && q.wrongReason" class="reason">{{ q.wrongReason }}</div>
@@ -85,6 +90,10 @@
               <div class="suggestion-label">🤖 AI推断的正确配对（供参考）：</div>
               <div class="suggestion-content">{{ q.correctAnswer || q.studentAnswer }}</div>
             </div>
+            <MatchingDiagram
+              v-if="isMatchingQuestion(q)"
+              :correctAnswer="q.correctAnswer || q.studentAnswer"
+            />
             <div class="input-line">
               <label>请输入孩子的答案（或点击上方AI答案一键填入）：</label>
               <input v-model="q.tempAnswer" class="small-input" :placeholder="q.correctAnswer || q.studentAnswer || '例如：仙人掌-叶刺-沙漠'" />
@@ -144,6 +153,7 @@
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useHomeworkStore } from '@/stores/homework'
+import MatchingDiagram from '@/components/MatchingDiagram.vue'
 
 const router = useRouter()
 const store = useHomeworkStore()
@@ -198,6 +208,20 @@ function removeQuestion(q) { const idx=questions.value.indexOf(q); if(idx>-1) qu
 function ignoreQuestion(q) { q.status='ignored' }
 function inputTextFor(q) { const t=prompt('请输入该题文字内容：'); if(t){ q.content=t; q.status='normal'; } }
 function formatText(t) { return (t||'').replace(/\n/g,'<br>') }
+
+// 检测是否为连线/配对题（从 answer 或 content 判断）
+function isMatchingQuestion(q) {
+  const ans = q.correctAnswer || q.studentAnswer || ''
+  const content = q.content || ''
+  // 有 → 符号
+  if (/→/.test(ans)) return true
+  // 多行配对格式（至少2行，每行有分隔符）
+  const lines = ans.split(/[,，\n]+/)
+  if (lines.length >= 2 && lines.every(l => l.includes('-') || l.includes('—'))) return true
+  // content中含"连线"或"配对"关键词
+  if (/连线|配对|匹配|对应/.test(content)) return true
+  return false
+}
 </script>
 
 <style scoped>
