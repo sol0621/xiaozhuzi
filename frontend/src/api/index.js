@@ -38,3 +38,23 @@ export async function fetchMistakeBook(params) {
   const res = await api.get('/mistake-book', { params })
   return res.data
 }
+
+export async function fetchAnalytics(params) {
+  const res = await api.get('/analytics/summary', { params })
+  return res.data
+}
+
+export async function fetchErrorPatterns(params) {
+  const res = await api.get('/analytics/error-patterns', { params })
+  return res.data
+}
+
+export async function fetchWeakPoints(params) {
+  const res = await api.get('/analytics/weak-points', { params })
+  return res.data
+}
+
+export async function fetchTrends(params) {
+  const res = await api.get('/analytics/trends', { params })
+  return res.data
+}

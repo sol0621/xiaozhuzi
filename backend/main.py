@@ -26,6 +26,7 @@ from models import HomeworkRecord, ProblemRecord
 from ocr_service import ocr_images
 from prompts import GRADE_RULES, SUBJECT_NAMES, get_subject_prompt, get_universal_prompt
 from question_parser import parse as parse_questions, format_for_llm
+from analytics import get_full_analysis, get_error_patterns, get_weak_points, get_trends
 from sqlalchemy import func, select
 
 # ---- LLM config ----
@@ -378,6 +379,45 @@ async def mistake_book(
 @app.get("/api/health")
 async def health():
     return {"status": "ok", "llm_configured": llm_client is not None}
+
+# ---- Analytics / 智能分析 ----
+@app.get("/api/analytics/summary")
+async def analytics_summary():
+    """获取全量分析报告：总览 + 错误模式 + 薄弱点 + 趋势 + 学科对比。"""
+    try:
+        data = await get_full_analysis()
+        return {"success": True, "data": data}
+    except Exception as e:
+        print("Analytics error:", e)
+        traceback.print_exc()
+        return {"success": False, "message": str(e)}
+
+@app.get("/api/analytics/error-patterns")
+async def analytics_error_patterns(subject: Optional[str] = None):
+    """获取错误模式分布（可选按学科筛选）。"""
+    try:
+        patterns = await get_error_patterns(subject)
+        return {"success": True, "data": patterns}
+    except Exception as e:
+        return {"success": False, "message": str(e)}
+
+@app.get("/api/analytics/weak-points")
+async def analytics_weak_points(subject: Optional[str] = None):
+    """获取薄弱知识点诊断（可选按学科筛选）。"""
+    try:
+        points = await get_weak_points(subject)
+        return {"success": True, "data": points}
+    except Exception as e:
+        return {"success": False, "message": str(e)}
+
+@app.get("/api/analytics/trends")
+async def analytics_trends(subject: Optional[str] = None):
+    """获取学习趋势（按周汇总，可选按学科筛选）。"""
+    try:
+        trends = await get_trends(subject)
+        return {"success": True, "data": trends}
+    except Exception as e:
+        return {"success": False, "message": str(e)}
 
 # ---- Serve frontend static files (production) ----
 import os as _os

@@ -53,7 +53,7 @@
 
     <div class="bottom-nav">
       <button @click="router.push('/mistake-book')">📖 错题本</button>
-      <button @click="router.push('/stats')">📊 易错统计</button>
+      <button @click="router.push('/analytics')">📊 学习分析</button>
     </div>
 
     <div v-if="loading" class="loading-mask">
