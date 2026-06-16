@@ -28,3 +28,13 @@ export async function recordError(payload) {
   const res = await api.post('/record-error', payload)
   return res.data
 }
+
+export async function correctProblem(payload) {
+  const res = await api.post('/correct-problem', payload)
+  return res.data
+}
+
+export async function fetchMistakeBook(params) {
+  const res = await api.get('/mistake-book', { params })
+  return res.data
+}

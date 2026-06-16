@@ -202,7 +202,10 @@ async def correct(
                         continue  # 跳过 not_attempted/answer_unclear/partial_recognition/unrecognizable
                     session.add(ProblemRecord(
                         homework_id=record.id,
+                        subject=subject,
                         question_content=str(q.get("content", ""))[:500],
+                        student_answer=str(q.get("studentAnswer", ""))[:1000],
+                        correct_answer=str(q.get("finalAnswer", ""))[:500],
                         is_correct=1 if q.get("isCorrect") else 0,
                         wrong_reason=str(q.get("wrongReason", ""))[:500],
                         error_type=str(q.get("errorType", ""))[:100],
@@ -264,6 +267,113 @@ async def stats():
 @app.post("/api/record-error")
 async def record_error(payload: dict):
     return {"success": True}
+
+class CorrectProblemRequest(BaseModel):
+    problem_id: int
+    correction_type: str  # "should_be_correct" / "should_be_wrong" / "custom_answer"
+    custom_answer: Optional[str] = None
+
+@app.post("/api/correct-problem")
+async def correct_problem(req: CorrectProblemRequest):
+    """家长纠正AI对某道题的判断。"""
+    try:
+        async with async_session() as session:
+            from sqlalchemy import select as sa_select
+            stmt = sa_select(ProblemRecord).where(ProblemRecord.id == req.problem_id)
+            result = await session.execute(stmt)
+            problem = result.scalar_one_or_none()
+            if not problem:
+                return {"success": False, "message": "题目不存在"}
+            
+            if req.correction_type == "should_be_correct":
+                problem.is_correct = 1
+                problem.parent_correction = "correct"
+            elif req.correction_type == "should_be_wrong":
+                problem.is_correct = 0
+                problem.parent_correction = "wrong"
+            elif req.correction_type == "custom_answer":
+                problem.correct_answer = req.custom_answer or ""
+                problem.parent_correction = f"custom:{req.custom_answer}"
+            
+            await session.commit()
+            return {"success": True, "message": "纠正已记录"}
+    except Exception as e:
+        return {"success": False, "message": str(e)}
+
+@app.get("/api/mistake-book")
+async def mistake_book(
+    subject: Optional[str] = None,
+    error_type: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    page: int = 1,
+    page_size: int = 20,
+):
+    """错题本查询，支持按学科/错误类型/时间筛选。"""
+    try:
+        async with async_session() as session:
+            from sqlalchemy import select as sa_select, and_, desc
+
+            conditions = []
+            if subject:
+                conditions.append(ProblemRecord.subject == subject)
+            if error_type:
+                conditions.append(ProblemRecord.error_type == error_type)
+            if start_date:
+                conditions.append(ProblemRecord.created_at >= start_date)
+            if end_date:
+                conditions.append(ProblemRecord.created_at <= end_date + " 23:59:59")
+
+            base_query = sa_select(ProblemRecord)
+            if conditions:
+                base_query = base_query.where(and_(*conditions))
+
+            # 总数
+            count_query = sa_select(func.count()).select_from(base_query.subquery())
+            total = await session.scalar(count_query) or 0
+
+            # 分页数据，按时间倒序
+            data_query = base_query.order_by(desc(ProblemRecord.created_at)).offset((page - 1) * page_size).limit(page_size)
+            rows = await session.execute(data_query)
+            problems = []
+            for r in rows.scalars().all():
+                problems.append({
+                    "id": r.id,
+                    "homework_id": r.homework_id,
+                    "subject": SUBJECT_NAMES.get(r.subject, r.subject),
+                    "question_content": r.question_content,
+                    "student_answer": r.student_answer,
+                    "correct_answer": r.correct_answer,
+                    "is_correct": r.is_correct == 1,
+                    "wrong_reason": r.wrong_reason,
+                    "error_type": r.error_type,
+                    "parent_correction": r.parent_correction,
+                    "created_at": r.created_at.isoformat() if r.created_at else "",
+                })
+
+            # 错误类型统计
+            type_query = sa_select(ProblemRecord.error_type, func.count(ProblemRecord.id).label("cnt"))\
+                .where(ProblemRecord.is_correct == 0)
+            if subject:
+                type_query = type_query.where(ProblemRecord.subject == subject)
+            type_query = type_query.group_by(ProblemRecord.error_type).order_by(func.count(ProblemRecord.id).desc())
+            type_rows = await session.execute(type_query)
+            error_types = [{"type": r.error_type or "未分类", "count": r.cnt} for r in type_rows.all()]
+
+            return {
+                "success": True,
+                "data": {
+                    "total": total,
+                    "page": page,
+                    "pageSize": page_size,
+                    "problems": problems,
+                    "errorTypes": error_types,
+                }
+            }
+    except Exception as e:
+        print("Mistake book error:", e)
+        traceback.print_exc()
+        return {"success": False, "message": str(e)}
 
 @app.get("/api/health")
 async def health():

@@ -51,6 +51,11 @@
       </button>
     </div>
 
+    <div class="bottom-nav">
+      <button @click="router.push('/mistake-book')">📖 错题本</button>
+      <button @click="router.push('/stats')">📊 易错统计</button>
+    </div>
+
     <div v-if="loading" class="loading-mask">
       <div class="spinner"></div>
       <div class="loading-text">{{ loadingText }}</div>
@@ -172,4 +177,7 @@ textarea { width:100%; padding:12px; border:1px solid #ddd; border-radius:8px; f
 .spinner { width:40px; height:40px; border:4px solid #eee; border-top-color:#4A90D9; border-radius:50%; animation:spin 1s linear infinite; margin-bottom:16px; }
 @keyframes spin { to { transform:rotate(360deg); } }
 .loading-text { color:#4A90D9; font-size:14px; }
+.bottom-nav { display: flex; gap: 12px; justify-content: center; padding-top: 8px; }
+.bottom-nav button { padding: 8px 20px; background: #f5f5f5; border: 1px solid #eee; border-radius: 10px; font-size: 13px; color: #666; cursor: pointer; }
+.bottom-nav button:hover { background: #E8F2FC; color: #4A90D9; }
 </style>
