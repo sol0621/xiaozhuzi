@@ -24,6 +24,8 @@ load_dotenv()
 from database import init_db, async_session
 from models import HomeworkRecord, ProblemRecord
 from ocr_service import ocr_images
+from prompts import GRADE_RULES, SUBJECT_NAMES, get_subject_prompt, get_universal_prompt
+from question_parser import parse as parse_questions, format_for_llm
 from sqlalchemy import func, select
 
 # ---- LLM config ----
@@ -36,60 +38,7 @@ llm_client: Optional[AsyncOpenAI] = None
 if LLM_BASE_URL and LLM_API_KEY:
     llm_client = AsyncOpenAI(base_url=LLM_BASE_URL, api_key=LLM_API_KEY)
 
-# ---- Grade rules ----
-GRADE_RULES = {
-    4: {
-        "math": "四年级数学允许：线段图、示意画图、分步计算、凑整法、列举法、倒推法、运算定律简化。严禁：方程（含用字母表示数）、代数推导、比例式、负数、分数乘除法。",
-        "chinese": "四年级语文：错别字/拼音/笔顺、基础标点、把字句/被字句、事件四要素、直接引语改间接引语（基础）。严禁：文言文语法、作者心理深度分析、文学流派术语。",
-        "english": "四年级英语（北京版一年级起点）：一般现在时（含三单）、现在进行时（be+doing）、基本句型转换、方位介词、there be基础、祈使句。严禁：一般过去时、比较级/最高级、一般将来时、音标系统教学、任何从句。",
-        "science": "四年级科学：声音由振动产生、简单电路与导体绝缘体分类、岩石外部特征、动植物生命周期、天气观测。严禁：频率公式、欧姆定律、食物链能量计算、化学成分分析、光合作用方程式。",
-    },
-    5: {
-        "math": "五年级数学允许：四年级全部+简易方程（一步/两步求解）、分数与小数互化、统计图表读取、因数分解（短除法）、长方体/正方体表面积和体积。严禁：负数、二元一次方程组、代数恒等变形、复杂多步比例、分数乘除法。",
-        "chinese": "五年级语文：四年级全部+修辞（比喻/拟人/排比/夸张/设问/反问，只讲实例不上术语定义）、说明方法（举例子/列数字/打比方/作比较）、中心句提取、段意概括、简单文言文只翻译字词、人物性格特点。严禁：文言文语法、过度推断、高中文学鉴赏术语、文化批评视角。",
-        "english": "五年级英语：四年级全部+一般过去时（规则/不规则常见20-30个）、形容词比较级/最高级（-er/-est）、一般将来时be going to（只讲'打算做某事'）、情态动词can/may/must口语区别。严禁：现在完成时、被动语态、任何从句、虚拟语气、动词不定式作成分。",
-        "science": "五年级科学：四年级全部+光的直线传播/反射/折射现象、食物链关系（只讲'谁吃谁'，不计算能量）、沉浮只定性、热传导/对流/辐射现象、简单机械定性（省力/费力）。严禁：浮力公式、杠杆平衡条件定量计算、能量守恒定律系统讲解、折射定律。",
-    },
-    6: {
-        "math": "六年级数学允许：五年级全部+一元一次方程（含分数系数）、比例式、百分数应用题（折扣/利率/成数）、圆/圆柱/圆锥表面积和体积、负数概念（仅认识，不进行四则运算）。严禁：负数四则运算、二元一次方程组、函数概念、一元二次方程、无理数。",
-        "chinese": "六年级语文：五年级全部+表达手法（借物喻人/对比/托物言志，只讲示例不上术语定义）、简单读后感（联系自身）、非连续性文本读取、小说人物简单分析（性格特点+情节作用）。严禁：初中及以上文言语法、社会历史宏大叙事分析、文学批评理论。",
-        "english": "六年级英语：五年级全部+will与be going to口语区别（'早有打算/临时决定'，只给例句）、there be时态扩展、可数/不可数+some/any/much/many、规则动词过去式拼写。严禁：现在完成时、被动语态、任何从句（包括宾语从句）、条件句术语（只讲'如果...就...'）、动词不定式作成分、动名词作主语。",
-        "science": "六年级科学：五年级全部+细胞基本结构（膜/质/核，知道植物有壁和叶绿体）、物质变化看现象（变色/冒泡/发热/沉淀=化学变化，不写方程式）、能量形式转换定性、地球自转/公转定性、生物分类到纲/目层级。严禁：化学方程式配平、物理公式定量计算（密度/压强/浮力/欧姆定律）、细胞器精细结构、光合作用/呼吸作用方程式、开普勒定律、基因详细结构。",
-    }
-}
-
-SUBJECT_NAMES = {"math":"数学","chinese":"语文","english":"英语","science":"科学"}
-
-# ---- Prompt builders ----
-def get_system_prompt(grade: int, subject: str) -> str:
-    rule = GRADE_RULES.get(grade, {}).get(subject, "")
-    return f"""你是一位{grade}年级{SUBJECT_NAMES.get(subject, subject)}作业批改老师。
-{rule}
-
-跨科目统一红线：
-1. 禁止输出原始JSON/PLHD/任何机器数据结构。
-2. 禁止输出"我不知道""这题我不会"——必须给出基于年级边界的最佳尝试。
-3. 禁止贬低学生，不得出现"这么简单的题都错"等负面评价。
-4. 禁止使用成人社交俚语/网络黑话。
-5. 数学禁止计算器思维，必须展示手算步骤。
-
-批改规则（逐题判断）：
-- 每道题独立检查：是否有学生答案/解题过程。
-- 有学生答案 → 判断对错，status设为"normal"（必须包含isCorrect字段）。
-- 没有学生答案（空白、只有题目未作答） → status设为"not_attempted"，不设isCorrect，但要给出explanation和finalAnswer（相当于帮你解答这道没做的题）。
-- 即使只有单个单词/句子，也尽量识别为题目——不到万不得已不要返回error。英文一个单词也是题目(如"apple")。
-- 模式统一用mode="correction"，不要单独用direct-answer。即使全部未答题也用correction。
-
-输出格式要求（必须是合法JSON，不要markdown代码块）：
-{{"mode":"correction","questions":[{{"id":1,"content":"题目原文","studentAnswer":"学生写的答案","isCorrect":true,"status":"normal"}},{{"id":2,"content":"题目原文","studentAnswer":"学生写的错误答案","isCorrect":false,"wrongReason":"具体错误原因","errorType":"错误类型标签如'计算错误'/'概念混淆'","status":"normal"}},{{"id":3,"content":"题目原文（无答案）","studentAnswer":"","status":"not_attempted","explanation":"分步解答过程","finalAnswer":"最终答案"}}]}}
-
-注意：
-- status可为："normal"（已作答）、"not_attempted"（未答题）、"answer_unclear"（答案模糊）、"partial_recognition"（题目不完整）、"unrecognizable"（无法识别）。
-- not_attempted题目必须有explanation和finalAnswer，不需要isCorrect/wrongReason/errorType。
-- normal题目必须有isCorrect字段。
-- 整页无有效题目返回mode="error"，questions为空。
-- 解答用中文分步讲解，符合年级铁律。"""
-
+# ---- Prompt builders (now in prompts.py) ----
 def get_explain_prompt(grade: int, subject: str, question: str, student_answer: str, correct_answer: str, wrong_reason: str) -> str:
     rule = GRADE_RULES.get(grade, {}).get(subject, "")
     return f"""你是一位{grade}年级{SUBJECT_NAMES.get(subject, subject)}辅导老师，正给一位做错题的孩子讲解。
@@ -181,8 +130,22 @@ async def correct(
         return {"success": False, "message": "没有识别到任何内容，请检查输入或图片"}
 
     full_text = "\n".join(texts)
-    system = get_system_prompt(grade, subject)
-    user = f"以下是学生提交的{grade}年级{SUBJECT_NAMES.get(subject, subject)}作业内容，请按规则批改或解答：\n\n{full_text}"
+
+    # Step 1: 拆题引擎预分割
+    parsed_questions, is_reliable = parse_questions(full_text)
+
+    # Step 2: 学科专用提示词
+    system = get_subject_prompt(grade, subject)
+
+    # Step 3: 构建用户消息
+    subject_name = SUBJECT_NAMES.get(subject, subject)
+    if parsed_questions and is_reliable:
+        # 规则引擎拆分可靠 → LLM 接收已拆好的题目，只需批改
+        formatted = format_for_llm(parsed_questions)
+        user = f"以下是已拆分好的{grade}年级{subject_name}作业题目（共{len(parsed_questions)}题），请逐题批改：\n\n{formatted}\n\n请输出所有题目的批改结果JSON。"
+    else:
+        # 规则引擎不可靠 → 回退到原始文本，LLM 自行拆题+批改
+        user = f"以下是学生提交的{grade}年级{subject_name}作业内容，请自行拆分题目并逐题批改：\n\n{full_text}"
 
     try:
         raw = await call_llm(system, user, temperature=0.2)
