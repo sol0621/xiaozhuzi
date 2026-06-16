@@ -1,6 +1,6 @@
 <template>
   <div class="submit-page">
-    <div class="header">小学作业辅导助手</div>
+    <div class="header"><img src="/avatar.jpg" class="app-avatar" /> 小学作业辅导助手</div>
 
     <div class="section">
       <div class="label">年级</div>
@@ -85,7 +85,7 @@ const subjects = [
 ]
 
 const canSubmit = computed(() => {
-  if (inputMode.value === 'text') return textContent.value.trim().length >= 3
+  if (inputMode.value === 'text') return textContent.value.trim().length >= 1
   return uploadedImages.value.length > 0
 })
 
@@ -144,7 +144,8 @@ onUnmounted(() => clearInterval(timer))
 
 <style scoped>
 .submit-page { padding: 16px; }
-.header { font-size: 20px; font-weight: 700; color: #4A90D9; text-align: center; margin-bottom: 20px; }
+.header { font-size: 20px; font-weight: 700; color: #4A90D9; text-align: center; margin-bottom: 20px; display: flex; align-items: center; justify-content: center; gap: 8px; }
+.app-avatar { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; border: 2px solid #4A90D9; }
 .section { margin-bottom: 20px; }
 .label { font-size: 14px; color: #666; margin-bottom: 8px; }
 .segment { display: flex; gap: 8px; }

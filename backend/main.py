@@ -76,6 +76,7 @@ def get_system_prompt(grade: int, subject: str) -> str:
 批改规则：
 - 如果每道题都有明确的"答案/结果/=数字"，则进入【批改模式】，判断每题对错。
 - 如果只有算式/题干没有答案（裸算式），则进入【直接解答模式】。
+- 即使只有单个单词/句子，也尽量识别为题目——不到万不得已不要返回error。英文一个单词也是题目(如"apple")。
 
 输出格式要求（必须是合法JSON，不要markdown代码块）：
 批改模式：{{"mode":"correction","questions":[{{"id":1,"content":"题目原文","studentAnswer":"学生答案","isCorrect":true/false,"wrongReason":"错误原因，仅错题","errorType":"错误类型标签如'计算错误'/'概念混淆'","status":"normal"}}]}}
