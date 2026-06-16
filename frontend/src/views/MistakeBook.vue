@@ -49,6 +49,11 @@
     <!-- 加载中 -->
     <div v-if="loading" class="loading">加载中...</div>
 
+    <!-- 讲解全部按钮 -->
+    <div v-if="problems.length > 0" class="explain-all-bar">
+      <button class="btn-explain-all" @click="explainAll">📖 逐题讲解（共 {{ problems.length }} 题）</button>
+    </div>
+
     <!-- 空状态 -->
     <div v-else-if="problems.length === 0" class="empty">
       <div class="empty-emoji">📭</div>
@@ -80,6 +85,9 @@
         <div v-if="p.wrong_reason" class="pc-reason">
           💡 错误原因：{{ p.wrong_reason }}
         </div>
+        <div class="pc-actions">
+          <button class="btn-explain" @click="goExplain(p, idx)">💡 讲解此题</button>
+        </div>
       </div>
     </div>
 
@@ -99,7 +107,12 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
+import { useHomeworkStore } from '@/stores/homework'
 import { fetchMistakeBook } from '@/api'
+
+const router = useRouter()
+const store = useHomeworkStore()
 
 const loading = ref(true)
 const problems = ref([])
@@ -193,6 +206,30 @@ function changePage(p) {
 function formatDate(d) {
   if (!d) return ''
   return d.slice(0, 10)
+}
+
+// 从错题本跳转到讲解页
+function mapToExplain(p) {
+  return {
+    content: p.question_content,
+    studentAnswer: p.student_answer,
+    correctAnswer: p.correct_answer,
+    wrongReason: p.wrong_reason,
+  }
+}
+
+function goExplain(p, idx) {
+  // 设置当前页所有错题为可翻页列表（统一格式映射）
+  store.allWrongQuestions = problems.value.map(mapToExplain)
+  store.grade = parseInt(p.grade) || 4
+  store.subject = p.subject === '数学' ? 'math' : p.subject === '语文' ? 'chinese' : p.subject === '英语' ? 'english' : 'science'
+  store.setExplainQuestion(mapToExplain(p), idx)
+  router.push('/explain')
+}
+
+function explainAll() {
+  if (!problems.value.length) return
+  goExplain(problems.value[0], 0)
 }
 
 function printMistakes() {
@@ -291,4 +328,10 @@ onMounted(() => {
 .export-bar { text-align: center; padding: 12px 16px; }
 .btn-outline { padding: 10px 20px; background: #fff; border: 1px solid #4A90D9; color: #4A90D9; border-radius: 8px; font-size: 14px; cursor: pointer; }
 .btn-primary { padding: 10px 20px; background: #4A90D9; color: #fff; border: none; border-radius: 8px; font-size: 14px; cursor: pointer; }
+
+/* 讲解按钮 */
+.explain-all-bar { padding: 0 16px 12px; }
+.btn-explain-all { width: 100%; padding: 12px; background: linear-gradient(135deg, #667EEA, #764BA2); color: #fff; border: none; border-radius: 10px; font-size: 15px; font-weight: 600; cursor: pointer; box-shadow: 0 2px 8px rgba(102,126,234,0.3); }
+.pc-actions { margin-top: 10px; display: flex; gap: 8px; }
+.btn-explain { padding: 6px 14px; background: #E8F2FC; color: #4A90D9; border: 1px solid #B8D4F0; border-radius: 6px; font-size: 12px; cursor: pointer; }
 </style>
