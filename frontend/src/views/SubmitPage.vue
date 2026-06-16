@@ -51,15 +51,17 @@
       </button>
     </div>
 
-    <div class="bottom-nav">
-      <button @click="router.push('/mistake-book')">📖 错题本</button>
-      <button @click="router.push('/analytics')">📊 学习分析</button>
-    </div>
-
     <div v-if="loading" class="loading-mask">
       <div class="spinner"></div>
       <div class="loading-text">{{ loadingText }}</div>
     </div>
+
+    <!-- Bottom Nav -->
+    <nav class="bottom-nav">
+      <router-link to="/" class="nav-item active">🏠 批改</router-link>
+      <router-link to="/mistake-book" class="nav-item">📒 错题本</router-link>
+      <router-link to="/analytics" class="nav-item">📊 分析</router-link>
+    </nav>
   </div>
 </template>
 
@@ -90,7 +92,7 @@ const subjects = [
 ]
 
 const canSubmit = computed(() => {
-  if (inputMode.value === 'text') return textContent.value.trim().length >= 1
+  if (inputMode.value === 'text') return textContent.value.trim().length >= 3
   return uploadedImages.value.length > 0
 })
 
@@ -148,7 +150,7 @@ onUnmounted(() => clearInterval(timer))
 </script>
 
 <style scoped>
-.submit-page { padding: 16px; }
+.submit-page { padding: 16px 16px 70px 16px; }
 .header { font-size: 20px; font-weight: 700; color: #4A90D9; text-align: center; margin-bottom: 20px; display: flex; align-items: center; justify-content: center; gap: 8px; }
 .app-avatar { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; border: 2px solid #4A90D9; }
 .section { margin-bottom: 20px; }
@@ -177,7 +179,9 @@ textarea { width:100%; padding:12px; border:1px solid #ddd; border-radius:8px; f
 .spinner { width:40px; height:40px; border:4px solid #eee; border-top-color:#4A90D9; border-radius:50%; animation:spin 1s linear infinite; margin-bottom:16px; }
 @keyframes spin { to { transform:rotate(360deg); } }
 .loading-text { color:#4A90D9; font-size:14px; }
-.bottom-nav { display: flex; gap: 12px; justify-content: center; padding-top: 8px; }
-.bottom-nav button { padding: 8px 20px; background: #f5f5f5; border: 1px solid #eee; border-radius: 10px; font-size: 13px; color: #666; cursor: pointer; }
-.bottom-nav button:hover { background: #E8F2FC; color: #4A90D9; }
+
+/* Bottom Navigation */
+.bottom-nav { display: flex; justify-content: space-around; align-items: center; position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 480px; background: #fff; border-top: 1px solid #eee; padding: 8px 0; z-index: 50; box-shadow: 0 -1px 4px rgba(0,0,0,0.04); }
+.nav-item { display: flex; flex-direction: column; align-items: center; gap: 2px; text-decoration: none; font-size: 11px; color: #999; padding: 4px 16px; }
+.nav-item.active { color: #4A90D9; font-weight: 600; }
 </style>

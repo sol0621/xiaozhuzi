@@ -24,13 +24,9 @@ export async function fetchStats(params) {
   return res.data
 }
 
-export async function recordError(payload) {
-  const res = await api.post('/record-error', payload)
-  return res.data
-}
-
-export async function correctProblem(payload) {
-  const res = await api.post('/correct-problem', payload)
+export async function fetchAnalytics(subject) {
+  const params = subject ? { subject } : {}
+  const res = await api.get('/analytics', { params })
   return res.data
 }
 
@@ -39,22 +35,7 @@ export async function fetchMistakeBook(params) {
   return res.data
 }
 
-export async function fetchAnalytics(params) {
-  const res = await api.get('/analytics/summary', { params })
-  return res.data
-}
-
-export async function fetchErrorPatterns(params) {
-  const res = await api.get('/analytics/error-patterns', { params })
-  return res.data
-}
-
-export async function fetchWeakPoints(params) {
-  const res = await api.get('/analytics/weak-points', { params })
-  return res.data
-}
-
-export async function fetchTrends(params) {
-  const res = await api.get('/analytics/trends', { params })
+export async function recordError(payload) {
+  const res = await api.post('/record-error', payload)
   return res.data
 }

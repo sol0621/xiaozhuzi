@@ -12,19 +12,17 @@ class HomeworkRecord(Base):
     total_count = Column(Integer, default=0)
     correct_count = Column(Integer, default=0)
     wrong_count = Column(Integer, default=0)
-    not_attempted_count = Column(Integer, default=0)
     created_at = Column(DateTime, server_default=func.now())
 
 class ProblemRecord(Base):
     __tablename__ = "problem_records"
     id = Column(Integer, primary_key=True, autoincrement=True)
     homework_id = Column(Integer, nullable=False)
-    subject = Column(String(20), default="")
     question_content = Column(Text)
-    student_answer = Column(Text, default="")
-    correct_answer = Column(Text, default="")
+    student_answer = Column(Text)
+    correct_answer = Column(Text)
     is_correct = Column(Integer, default=1)
     wrong_reason = Column(Text)
     error_type = Column(String(100))
-    parent_correction = Column(String(20), default="")  # "correct" / "wrong" / custom answer text
+    parent_correction = Column(Text)
     created_at = Column(DateTime, server_default=func.now())

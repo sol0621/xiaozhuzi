@@ -63,9 +63,8 @@
     <div v-else class="normal-mode">
       <div v-if="pendingCount > 0" class="yellow-bar">⚠️ 有 {{ pendingCount }} 道题需要确认</div>
       <div class="stats-bar">
-        <span v-if="pendingCount===0 && notAttemptedCount===0">📊 共 {{ totalCount }} 题 | ✅ {{ correctCount }} 对 | ❌ {{ wrongCount }} 错</span>
-        <span v-else-if="pendingCount===0">📊 共 {{ totalCount }} 题 | ✅ {{ correctCount }} 对 | ❌ {{ wrongCount }} 错 | 📝 {{ notAttemptedCount }} 未答</span>
-        <span v-else>已识别 {{ recognizedCount }} 题 | ✅ {{ correctCount }} 对 | ❌ {{ wrongCount }} 错 | 📝 {{ notAttemptedCount }} 未答 | ⏳ {{ pendingCount }} 待确认</span>
+        <span v-if="pendingCount===0">📊 共 {{ totalCount }} 题 | ✅ {{ correctCount }} 对 | ❌ {{ wrongCount }} 错</span>
+        <span v-else>已识别 {{ recognizedCount }} 题 | ✅ {{ correctCount }} 对 | ❌ {{ wrongCount }} 错 | ⏳ {{ pendingCount }} 待确认</span>
       </div>
 
       <div class="cards">
@@ -77,9 +76,6 @@
             <div :class="['badge', q.isCorrect?'correct':'wrong']">{{ q.isCorrect ? '✅ 正确' : '❌ 错误' }}</div>
             <div v-if="!q.isCorrect && q.wrongReason" class="reason">{{ q.wrongReason }}</div>
             <button v-if="!q.isCorrect" class="explain-btn" @click="goExplain(q)">📖 查看讲解</button>
-            <div class="correct-link" @click="openCorrect(q)">
-              {{ q._corrected ? '✓ 已纠正' : '不对？点此纠正' }}
-            </div>
           </template>
 
           <template v-else-if="q.status==='answer_unclear'">
@@ -92,16 +88,6 @@
             <div class="actions-row">
               <button class="btn-small" @click="confirmAnswer(q)">✅ 确认答案</button>
               <button class="btn-small ghost" @click="skipQuestion(q)">⏭️ 跳过此题</button>
-            </div>
-          </template>
-
-          <template v-else-if="q.status==='not_attempted'">
-            <div class="card-header warn">第 {{ q.id }} 题 📝 未答题</div>
-            <div class="question-content">{{ q.content }}</div>
-            <div class="answer-section">
-              <div class="section-title">参考答案：</div>
-              <div class="explanation-text" v-html="formatText(q.explanation)"></div>
-              <div class="final-answer">答案：{{ q.finalAnswer }}</div>
             </div>
           </template>
 
@@ -133,28 +119,7 @@
         </div>
       </div>
 
-      <!-- 纠错弹窗 -->
-    <div v-if="correctModal.visible" class="modal-overlay" @click.self="closeCorrect">
-      <div class="modal-card">
-        <div class="modal-title">纠正 AI 判断</div>
-        <div class="modal-body">
-          <p class="modal-q">第 {{ correctModal.q?.id }} 题：{{ correctModal.q?.content }}</p>
-          <p class="modal-a">AI 当前判断：<b :style="{color: correctModal.q?.isCorrect ? '#5CB85C' : '#D93025'}">{{ correctModal.q?.isCorrect ? '正确' : '错误' }}</b></p>
-          <div class="modal-options">
-            <button class="corr-btn should-correct" @click="doCorrect('should_be_correct')">✅ 应该判为正确</button>
-            <button class="corr-btn should-wrong" @click="doCorrect('should_be_wrong')">❌ 应该判为错误</button>
-          </div>
-          <div class="modal-input-row">
-            <label>或输入正确答案：</label>
-            <input v-model="correctModal.customAnswer" class="modal-input" placeholder="输入正确答案..." />
-            <button class="corr-btn custom" @click="doCorrect('custom_answer')">确认</button>
-          </div>
-        </div>
-        <button class="modal-close" @click="closeCorrect">取消</button>
-      </div>
-    </div>
-
-    <div v-if="wrongCount > 0 && pendingCount===0" class="footer-action">
+      <div v-if="wrongCount > 0 && pendingCount===0" class="footer-action">
         <button class="btn-primary" @click="explainAll">📖 一键讲解 {{ wrongCount }} 道错题</button>
       </div>
       <div v-else-if="wrongCount > 0 && pendingCount > 0" class="footer-action">
@@ -162,8 +127,8 @@
       </div>
 
       <div class="footer-links">
-        <button class="text-btn" @click="$router.push('/mistake-book')">📖 错题本</button>
-        <button class="text-btn" @click="goStats">📊 查看易错点统计</button>
+        <router-link to="/mistake-book" class="text-btn">📒 错题本</router-link>
+        <router-link to="/analytics" class="text-btn">📊 学习分析</router-link>
       </div>
     </div>
   </div>
@@ -173,7 +138,6 @@
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useHomeworkStore } from '@/stores/homework'
-import { correctProblem } from '@/api'
 
 const router = useRouter()
 const store = useHomeworkStore()
@@ -184,15 +148,14 @@ const questions = computed(() => res.questions || [])
 const totalCount = computed(() => res.totalCount || 0)
 const correctCount = computed(() => res.correctCount || 0)
 const wrongCount = computed(() => res.wrongCount || 0)
-const notAttemptedCount = computed(() => res.notAttemptedCount || 0)
 const errorMessage = computed(() => res.errorType || res.rawText?.slice(0,200) || '未知错误')
 
 const mode = computed(() => {
   if (rawMode.value === 'ai_error') return 'ai_error'
   if (rawMode.value === 'error') return 'error'
   if (rawMode.value === 'direct-answer') return 'direct-answer'
-  if (rawMode.value === 'all_correct' && wrongCount.value === 0) return 'all_correct'
-  return 'correction'
+  if (rawMode.value === 'correction' && wrongCount.value === 0 && questions.value.every(q => q.status === 'normal')) return 'all_correct'
+  return rawMode.value
 })
 
 const pageTitle = computed(() => {
@@ -202,12 +165,11 @@ const pageTitle = computed(() => {
 })
 
 const displayQuestions = computed(() => questions.value)
-const recognizedCount = computed(() => questions.value.filter(q => q.status==='normal' || q.status==='not_attempted').length)
+const recognizedCount = computed(() => questions.value.filter(q => q.status==='normal').length)
 const pendingCount = computed(() => questions.value.filter(q => ['answer_unclear','partial_recognition'].includes(q.status)).length)
 
 function cardClass(q) {
   if (q.status==='normal') return q.isCorrect ? 'correct-card' : 'wrong-card'
-  if (q.status==='not_attempted') return 'not-attempted-card'
   if (q.status==='answer_unclear' || q.status==='partial_recognition') return 'warn-card'
   if (q.status==='unrecognizable') return 'muted-card'
   return 'ghost-card'
@@ -230,44 +192,6 @@ function removeQuestion(q) { const idx=questions.value.indexOf(q); if(idx>-1) qu
 function ignoreQuestion(q) { q.status='ignored' }
 function inputTextFor(q) { const t=prompt('请输入该题文字内容：'); if(t){ q.content=t; q.status='normal'; } }
 function formatText(t) { return (t||'').replace(/\n/g,'<br>') }
-
-// 纠错弹窗
-const correctModal = computed(() => store.correctModal)
-function openCorrect(q) {
-  store.correctModal = {
-    visible: true,
-    q: q,
-    customAnswer: '',
-  }
-}
-function closeCorrect() {
-  store.correctModal = { visible: false, q: null, customAnswer: '' }
-}
-async function doCorrect(type) {
-  const q = correctModal.value.q
-  if (!q) return
-  const payload = { problem_id: q._problemId || q.id, correction_type: type }
-  if (type === 'custom_answer' && correctModal.value.customAnswer) {
-    payload.custom_answer = correctModal.value.customAnswer
-  }
-  try {
-    const res = await correctProblem(payload)
-    if (res.success) {
-      if (type === 'should_be_correct') {
-        q.isCorrect = true
-        q._corrected = true
-      } else if (type === 'should_be_wrong') {
-        q.isCorrect = false
-        q._corrected = true
-      }
-      // 更新 store 中的统计数据
-      store.refreshCounts()
-    }
-  } catch(e) {
-    console.error(e)
-  }
-  closeCorrect()
-}
 </script>
 
 <style scoped>
@@ -283,7 +207,6 @@ async function doCorrect(type) {
 .correct-card { border-left:4px solid #5CB85C; }
 .wrong-card { border-left:4px solid #F0AD4E; }
 .direct-card { border-left:4px solid #4A90D9; }
-.not-attempted-card { border-left:4px solid #9B59B6; background:#FAF5FF; }
 .warn-card { border-left:4px solid #F5A623; background:#FFFBF2; }
 .muted-card { border-left:4px solid #ccc; background:#f5f5f5; }
 .ghost-card { background:#eee; opacity:0.7; }
@@ -309,8 +232,8 @@ async function doCorrect(type) {
 .footer-action { position:fixed; bottom:0; left:0; right:0; max-width:480px; margin:0 auto; padding:12px 16px; background:#fff; border-top:1px solid #eee; }
 .footer-action .btn-primary { width:100%; padding:14px; background:#4A90D9; color:#fff; border:none; border-radius:12px; font-size:16px; font-weight:600; cursor:pointer; }
 .footer-action .btn-primary:disabled { background:#ccc; cursor:not-allowed; }
-.footer-links { text-align:center; padding:16px; display:flex; gap:16px; justify-content:center; }
-.text-btn { background:none; border:none; color:#4A90D9; font-size:14px; cursor:pointer; }
+.footer-links { display: flex; justify-content: center; gap: 24px; padding: 16px; }
+.text-btn { background: none; border: none; color: #4A90D9; font-size: 14px; cursor: pointer; text-decoration: none; }
 .celebrate { padding:24px 16px; text-align:center; }
 .celebrate-emoji { font-size:48px; margin-bottom:12px; }
 .celebrate-title { font-size:18px; font-weight:700; color:#5CB85C; margin-bottom:20px; }
@@ -324,21 +247,4 @@ async function doCorrect(type) {
 .btn-primary { padding:10px 20px; background:#4A90D9; color:#fff; border:none; border-radius:8px; font-size:14px; cursor:pointer; }
 .direct-mode .tip-bar { background:#E8F2FC; color:#4A90D9; padding:10px 16px; font-size:13px; margin-bottom:8px; }
 .sub-hint { font-size:12px; color:#999; margin-bottom:8px; }
-.correct-link { text-align: right; font-size: 12px; color: #999; margin-top: 8px; cursor: pointer; }
-.correct-link:hover { color: #4A90D9; }
-
-/* 纠错弹窗 */
-.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 24px; }
-.modal-card { background: #fff; border-radius: 14px; padding: 24px; width: 100%; max-width: 360px; }
-.modal-title { font-size: 17px; font-weight: 700; margin-bottom: 16px; text-align: center; }
-.modal-q { font-size: 14px; color: #333; margin-bottom: 8px; }
-.modal-a { font-size: 13px; color: #666; margin-bottom: 16px; }
-.modal-options { display: flex; gap: 10px; margin-bottom: 16px; }
-.corr-btn { flex: 1; padding: 12px; border: none; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; }
-.corr-btn.should-correct { background: #E6F4EA; color: #1E8E3E; }
-.corr-btn.should-wrong { background: #FCE8E6; color: #D93025; }
-.corr-btn.custom { flex: none; padding: 8px 16px; background: #4A90D9; color: #fff; border-radius: 8px; }
-.modal-input-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; font-size: 13px; }
-.modal-input { flex: 1; min-width: 120px; padding: 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; }
-.modal-close { display: block; margin: 0 auto; padding: 8px 24px; background: #fff; border: 1px solid #ddd; border-radius: 8px; font-size: 13px; color: #999; cursor: pointer; }
 </style>

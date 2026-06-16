@@ -24,9 +24,6 @@ load_dotenv()
 from database import init_db, async_session
 from models import HomeworkRecord, ProblemRecord
 from ocr_service import ocr_images
-from prompts import GRADE_RULES, SUBJECT_NAMES, get_subject_prompt, get_universal_prompt
-from question_parser import parse as parse_questions, format_for_llm
-from analytics import get_full_analysis, get_error_patterns, get_weak_points, get_trends
 from sqlalchemy import func, select
 
 # ---- LLM config ----
@@ -39,7 +36,57 @@ llm_client: Optional[AsyncOpenAI] = None
 if LLM_BASE_URL and LLM_API_KEY:
     llm_client = AsyncOpenAI(base_url=LLM_BASE_URL, api_key=LLM_API_KEY)
 
-# ---- Prompt builders (now in prompts.py) ----
+# ---- Grade rules ----
+GRADE_RULES = {
+    4: {
+        "math": "四年级数学允许：线段图、示意画图、分步计算、凑整法、列举法、倒推法、运算定律简化。严禁：方程（含用字母表示数）、代数推导、比例式、负数、分数乘除法。",
+        "chinese": "四年级语文：错别字/拼音/笔顺、基础标点、把字句/被字句、事件四要素、直接引语改间接引语（基础）。严禁：文言文语法、作者心理深度分析、文学流派术语。",
+        "english": "四年级英语（北京版一年级起点）：一般现在时（含三单）、现在进行时（be+doing）、基本句型转换、方位介词、there be基础、祈使句。严禁：一般过去时、比较级/最高级、一般将来时、音标系统教学、任何从句。",
+        "science": "四年级科学：声音由振动产生、简单电路与导体绝缘体分类、岩石外部特征、动植物生命周期、天气观测。严禁：频率公式、欧姆定律、食物链能量计算、化学成分分析、光合作用方程式。",
+    },
+    5: {
+        "math": "五年级数学允许：四年级全部+简易方程（一步/两步求解）、分数与小数互化、统计图表读取、因数分解（短除法）、长方体/正方体表面积和体积。严禁：负数、二元一次方程组、代数恒等变形、复杂多步比例、分数乘除法。",
+        "chinese": "五年级语文：四年级全部+修辞（比喻/拟人/排比/夸张/设问/反问，只讲实例不上术语定义）、说明方法（举例子/列数字/打比方/作比较）、中心句提取、段意概括、简单文言文只翻译字词、人物性格特点。严禁：文言文语法、过度推断、高中文学鉴赏术语、文化批评视角。",
+        "english": "五年级英语：四年级全部+一般过去时（规则/不规则常见20-30个）、形容词比较级/最高级（-er/-est）、一般将来时be going to（只讲'打算做某事'）、情态动词can/may/must口语区别。严禁：现在完成时、被动语态、任何从句、虚拟语气、动词不定式作成分。",
+        "science": "五年级科学：四年级全部+光的直线传播/反射/折射现象、食物链关系（只讲'谁吃谁'，不计算能量）、沉浮只定性、热传导/对流/辐射现象、简单机械定性（省力/费力）。严禁：浮力公式、杠杆平衡条件定量计算、能量守恒定律系统讲解、折射定律。",
+    },
+    6: {
+        "math": "六年级数学允许：五年级全部+一元一次方程（含分数系数）、比例式、百分数应用题（折扣/利率/成数）、圆/圆柱/圆锥表面积和体积、负数概念（仅认识，不进行四则运算）。严禁：负数四则运算、二元一次方程组、函数概念、一元二次方程、无理数。",
+        "chinese": "六年级语文：五年级全部+表达手法（借物喻人/对比/托物言志，只讲示例不上术语定义）、简单读后感（联系自身）、非连续性文本读取、小说人物简单分析（性格特点+情节作用）。严禁：初中及以上文言语法、社会历史宏大叙事分析、文学批评理论。",
+        "english": "六年级英语：五年级全部+will与be going to口语区别（'早有打算/临时决定'，只给例句）、there be时态扩展、可数/不可数+some/any/much/many、规则动词过去式拼写。严禁：现在完成时、被动语态、任何从句（包括宾语从句）、条件句术语（只讲'如果...就...'）、动词不定式作成分、动名词作主语。",
+        "science": "六年级科学：五年级全部+细胞基本结构（膜/质/核，知道植物有壁和叶绿体）、物质变化看现象（变色/冒泡/发热/沉淀=化学变化，不写方程式）、能量形式转换定性、地球自转/公转定性、生物分类到纲/目层级。严禁：化学方程式配平、物理公式定量计算（密度/压强/浮力/欧姆定律）、细胞器精细结构、光合作用/呼吸作用方程式、开普勒定律、基因详细结构。",
+    }
+}
+
+SUBJECT_NAMES = {"math":"数学","chinese":"语文","english":"英语","science":"科学"}
+
+# ---- Prompt builders ----
+def get_system_prompt(grade: int, subject: str) -> str:
+    rule = GRADE_RULES.get(grade, {}).get(subject, "")
+    return f"""你是一位{grade}年级{SUBJECT_NAMES.get(subject, subject)}作业批改老师。
+{rule}
+
+跨科目统一红线：
+1. 禁止输出原始JSON/PLHD/任何机器数据结构。
+2. 禁止输出"我不知道""这题我不会"——必须给出基于年级边界的最佳尝试。
+3. 禁止贬低学生，不得出现"这么简单的题都错"等负面评价。
+4. 禁止使用成人社交俚语/网络黑话。
+5. 数学禁止计算器思维，必须展示手算步骤。
+
+批改规则：
+- 如果每道题都有明确的"答案/结果/=数字"，则进入【批改模式】，判断每题对错。
+- 如果只有算式/题干没有答案（裸算式），则进入【直接解答模式】。
+
+输出格式要求（必须是合法JSON，不要markdown代码块）：
+批改模式：{{"mode":"correction","questions":[{{"id":1,"content":"题目原文","studentAnswer":"学生答案","isCorrect":true/false,"wrongReason":"错误原因，仅错题","errorType":"错误类型标签如'计算错误'/'概念混淆'","status":"normal"}}]}}
+直接解答模式：{{"mode":"direct-answer","questions":[{{"id":1,"content":"题目原文","explanation":"分步解答过程","finalAnswer":"最终答案","status":"normal"}}]}}
+
+注意：
+- 每道题status只能是"normal""answer_unclear""partial_recognition""unrecognizable"。
+- 优先status为normal；答案模糊时标记answer_unclear并尽量给出content。
+- 整页无有效题目返回mode="error"，questions为空。
+- 直接解答模式的explanation请用中文分步讲解，符合年级铁律。"""
+
 def get_explain_prompt(grade: int, subject: str, question: str, student_answer: str, correct_answer: str, wrong_reason: str) -> str:
     rule = GRADE_RULES.get(grade, {}).get(subject, "")
     return f"""你是一位{grade}年级{SUBJECT_NAMES.get(subject, subject)}辅导老师，正给一位做错题的孩子讲解。
@@ -131,22 +178,8 @@ async def correct(
         return {"success": False, "message": "没有识别到任何内容，请检查输入或图片"}
 
     full_text = "\n".join(texts)
-
-    # Step 1: 拆题引擎预分割
-    parsed_questions, is_reliable = parse_questions(full_text)
-
-    # Step 2: 学科专用提示词
-    system = get_subject_prompt(grade, subject)
-
-    # Step 3: 构建用户消息
-    subject_name = SUBJECT_NAMES.get(subject, subject)
-    if parsed_questions and is_reliable:
-        # 规则引擎拆分可靠 → LLM 接收已拆好的题目，只需批改
-        formatted = format_for_llm(parsed_questions)
-        user = f"以下是已拆分好的{grade}年级{subject_name}作业题目（共{len(parsed_questions)}题），请逐题批改：\n\n{formatted}\n\n请输出所有题目的批改结果JSON。"
-    else:
-        # 规则引擎不可靠 → 回退到原始文本，LLM 自行拆题+批改
-        user = f"以下是学生提交的{grade}年级{subject_name}作业内容，请自行拆分题目并逐题批改：\n\n{full_text}"
+    system = get_system_prompt(grade, subject)
+    user = f"以下是学生提交的{grade}年级{SUBJECT_NAMES.get(subject, subject)}作业内容，请按规则批改或解答：\n\n{full_text}"
 
     try:
         raw = await call_llm(system, user, temperature=0.2)
@@ -164,17 +197,10 @@ async def correct(
         return {"success": True, "data": {"mode": "error", "totalCount": 0, "questions": []}}
 
     total = len(questions)
-    not_attempted = sum(1 for q in questions if q.get("status") == "not_attempted")
-    if mode == "correction" or (mode not in ("direct-answer", "error")):
-        correct = sum(1 for q in questions if q.get("isCorrect") and q.get("status") == "normal")
-        wrong = sum(1 for q in questions if not q.get("isCorrect") and q.get("status") == "normal")
-        # 全对判断：所有normal题都正确，且没有答案模糊/异常状态题，not_attempted不影响
-        if correct == (total - not_attempted) and wrong == 0 and total > 0 and \
-           all(q.get("status") in ("normal", "not_attempted") for q in questions) and \
-           correct > 0:
-            result_data = {"mode": "all_correct", "totalCount": total, "correctCount": correct, "wrongCount": 0, "notAttemptedCount": not_attempted, "questions": questions}
-        else:
-            result_data = {"mode": "correction", "totalCount": total, "correctCount": correct, "wrongCount": wrong, "notAttemptedCount": not_attempted, "questions": questions}
+    if mode == "correction":
+        correct = sum(1 for q in questions if q.get("isCorrect"))
+        wrong = total - correct
+        result_data = {"mode": "correction", "totalCount": total, "correctCount": correct, "wrongCount": wrong, "questions": questions}
     elif mode == "direct-answer":
         result_data = {"mode": "direct-answer", "totalCount": total, "questions": questions}
     else:
@@ -193,20 +219,18 @@ async def correct(
                 total_count=result_data.get("totalCount", 0),
                 correct_count=result_data.get("correctCount", 0),
                 wrong_count=result_data.get("wrongCount", 0),
-                not_attempted_count=result_data.get("notAttemptedCount", 0),
             )
             session.add(record)
             await session.flush()
-            if result_data["mode"] in ("correction", "all_correct"):
+            if result_data["mode"] == "correction":
                 for q in questions:
                     if q.get("status") != "normal":
-                        continue  # 跳过 not_attempted/answer_unclear/partial_recognition/unrecognizable
+                        continue
                     session.add(ProblemRecord(
                         homework_id=record.id,
-                        subject=subject,
                         question_content=str(q.get("content", ""))[:500],
-                        student_answer=str(q.get("studentAnswer", ""))[:1000],
-                        correct_answer=str(q.get("finalAnswer", ""))[:500],
+                        student_answer=str(q.get("studentAnswer", ""))[:500],
+                        correct_answer="",  # LLM不直接返回正确答案，由后续讲解提供
                         is_correct=1 if q.get("isCorrect") else 0,
                         wrong_reason=str(q.get("wrongReason", ""))[:500],
                         error_type=str(q.get("errorType", ""))[:100],
@@ -265,159 +289,124 @@ async def stats():
         traceback.print_exc()
         return {"success": True, "data": {"totalProblems":0,"totalErrors":0,"accuracyRate":"N/A","topErrors":[],"subjectDist":[]}}
 
-@app.post("/api/record-error")
-async def record_error(payload: dict):
-    return {"success": True}
-
-class CorrectProblemRequest(BaseModel):
-    problem_id: int
-    correction_type: str  # "should_be_correct" / "should_be_wrong" / "custom_answer"
-    custom_answer: Optional[str] = None
-
-@app.post("/api/correct-problem")
-async def correct_problem(req: CorrectProblemRequest):
-    """家长纠正AI对某道题的判断。"""
+@app.get("/api/analytics")
+async def analytics(subject: Optional[str] = None):
+    """学习分析报告：错误模式/薄弱知识点/趋势/学科对比。"""
+    from analytics import get_full_analysis, get_error_patterns, get_weak_points, get_trends
     try:
-        async with async_session() as session:
-            from sqlalchemy import select as sa_select
-            stmt = sa_select(ProblemRecord).where(ProblemRecord.id == req.problem_id)
-            result = await session.execute(stmt)
-            problem = result.scalar_one_or_none()
-            if not problem:
-                return {"success": False, "message": "题目不存在"}
-            
-            if req.correction_type == "should_be_correct":
-                problem.is_correct = 1
-                problem.parent_correction = "correct"
-            elif req.correction_type == "should_be_wrong":
-                problem.is_correct = 0
-                problem.parent_correction = "wrong"
-            elif req.correction_type == "custom_answer":
-                problem.correct_answer = req.custom_answer or ""
-                problem.parent_correction = f"custom:{req.custom_answer}"
-            
-            await session.commit()
-            return {"success": True, "message": "纠正已记录"}
+        full = await get_full_analysis()
+        if not full or full.get("overview", {}).get("totalProblems", 0) == 0:
+            return {"success": False, "message": "暂无批改数据，请先提交作业"}
+        # 若指定学科，覆盖筛选后的错误模式和薄弱点
+        if subject:
+            full["errorPatterns"] = await get_error_patterns(subject)
+            full["weakPoints"] = await get_weak_points(subject)
+        return {"success": True, "data": full}
     except Exception as e:
-        return {"success": False, "message": str(e)}
+        print("Analytics error:", e)
+        traceback.print_exc()
+        return {"success": False, "message": f"分析失败：{str(e)}"}
 
 @app.get("/api/mistake-book")
 async def mistake_book(
-    subject: Optional[str] = None,
-    error_type: Optional[str] = None,
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
-    page: int = 1,
-    page_size: int = 20,
+    page: int = 1, page_size: int = 20,
+    subject: Optional[str] = None, error_type: Optional[str] = None,
+    start_date: Optional[str] = None, end_date: Optional[str] = None,
 ):
-    """错题本查询，支持按学科/错误类型/时间筛选。"""
+    """错题本：分页查询错题，支持按学科/错误类型/时间筛选。"""
+    from sqlalchemy import desc as desc_
+    from datetime import date as date_type
     try:
         async with async_session() as session:
-            from sqlalchemy import select as sa_select, and_, desc
+            # 基础条件：只查错题
+            conditions = [ProblemRecord.is_correct == 0]
 
-            conditions = []
-            if subject:
-                conditions.append(ProblemRecord.subject == subject)
             if error_type:
                 conditions.append(ProblemRecord.error_type == error_type)
-            if start_date:
-                conditions.append(ProblemRecord.created_at >= start_date)
-            if end_date:
-                conditions.append(ProblemRecord.created_at <= end_date + " 23:59:59")
 
-            base_query = sa_select(ProblemRecord)
-            if conditions:
-                base_query = base_query.where(and_(*conditions))
+            # Join HomeworkRecord 获取 subject 和 grade
+            join_conditions = [ProblemRecord.homework_id == HomeworkRecord.id]
+            if subject:
+                join_conditions.append(HomeworkRecord.subject == subject)
+
+            # 日期筛选
+            if start_date:
+                conditions.append(func.date(ProblemRecord.created_at) >= start_date)
+            if end_date:
+                conditions.append(func.date(ProblemRecord.created_at) <= end_date)
 
             # 总数
-            count_query = sa_select(func.count()).select_from(base_query.subquery())
-            total = await session.scalar(count_query) or 0
+            from sqlalchemy import join as sql_join
+            count_stmt = (
+                select(func.count(ProblemRecord.id))
+                .select_from(ProblemRecord)
+                .join(HomeworkRecord, *join_conditions)
+                .where(and_(*conditions))
+            )
+            total = await session.scalar(count_stmt) or 0
 
-            # 分页数据，按时间倒序
-            data_query = base_query.order_by(desc(ProblemRecord.created_at)).offset((page - 1) * page_size).limit(page_size)
-            rows = await session.execute(data_query)
+            # 分页数据
+            stmt = (
+                select(ProblemRecord, HomeworkRecord.subject, HomeworkRecord.grade)
+                .select_from(ProblemRecord)
+                .join(HomeworkRecord, *join_conditions)
+                .where(and_(*conditions))
+                .order_by(desc_(ProblemRecord.created_at))
+                .offset((page - 1) * page_size)
+                .limit(page_size)
+            )
+            rows = await session.execute(stmt)
             problems = []
-            for r in rows.scalars().all():
+            for pr, subj, grd in rows.all():
                 problems.append({
-                    "id": r.id,
-                    "homework_id": r.homework_id,
-                    "subject": SUBJECT_NAMES.get(r.subject, r.subject),
-                    "question_content": r.question_content,
-                    "student_answer": r.student_answer,
-                    "correct_answer": r.correct_answer,
-                    "is_correct": r.is_correct == 1,
-                    "wrong_reason": r.wrong_reason,
-                    "error_type": r.error_type,
-                    "parent_correction": r.parent_correction,
-                    "created_at": r.created_at.isoformat() if r.created_at else "",
+                    "id": pr.id,
+                    "subject": SUBJECT_NAMES.get(subj, subj),
+                    "grade": grd,
+                    "question_content": pr.question_content or "",
+                    "student_answer": pr.student_answer or "",
+                    "correct_answer": pr.correct_answer or "",
+                    "wrong_reason": pr.wrong_reason or "",
+                    "error_type": pr.error_type or "",
+                    "parent_correction": pr.parent_correction or "",
+                    "created_at": pr.created_at.isoformat() if pr.created_at else "",
                 })
 
-            # 错误类型统计
-            type_query = sa_select(ProblemRecord.error_type, func.count(ProblemRecord.id).label("cnt"))\
+            # 错误类型汇总（用于筛选下拉）
+            type_stmt = (
+                select(ProblemRecord.error_type, func.count(ProblemRecord.id).label("cnt"))
+                .select_from(ProblemRecord)
+                .join(HomeworkRecord, ProblemRecord.homework_id == HomeworkRecord.id)
                 .where(ProblemRecord.is_correct == 0)
+                .group_by(ProblemRecord.error_type)
+                .order_by(desc_("cnt"))
+            )
             if subject:
-                type_query = type_query.where(ProblemRecord.subject == subject)
-            type_query = type_query.group_by(ProblemRecord.error_type).order_by(func.count(ProblemRecord.id).desc())
-            type_rows = await session.execute(type_query)
+                type_stmt = type_stmt.where(HomeworkRecord.subject == subject)
+            type_rows = await session.execute(type_stmt)
             error_types = [{"type": r.error_type or "未分类", "count": r.cnt} for r in type_rows.all()]
 
             return {
                 "success": True,
                 "data": {
+                    "problems": problems,
+                    "errorTypes": error_types,
                     "total": total,
                     "page": page,
                     "pageSize": page_size,
-                    "problems": problems,
-                    "errorTypes": error_types,
                 }
             }
     except Exception as e:
-        print("Mistake book error:", e)
+        print("MistakeBook error:", e)
         traceback.print_exc()
-        return {"success": False, "message": str(e)}
+        return {"success": False, "message": f"查询失败：{str(e)}"}
+
+@app.post("/api/record-error")
+async def record_error(payload: dict):
+    return {"success": True}
 
 @app.get("/api/health")
 async def health():
     return {"status": "ok", "llm_configured": llm_client is not None}
-
-# ---- Analytics / 智能分析 ----
-@app.get("/api/analytics/summary")
-async def analytics_summary():
-    """获取全量分析报告：总览 + 错误模式 + 薄弱点 + 趋势 + 学科对比。"""
-    try:
-        data = await get_full_analysis()
-        return {"success": True, "data": data}
-    except Exception as e:
-        print("Analytics error:", e)
-        traceback.print_exc()
-        return {"success": False, "message": str(e)}
-
-@app.get("/api/analytics/error-patterns")
-async def analytics_error_patterns(subject: Optional[str] = None):
-    """获取错误模式分布（可选按学科筛选）。"""
-    try:
-        patterns = await get_error_patterns(subject)
-        return {"success": True, "data": patterns}
-    except Exception as e:
-        return {"success": False, "message": str(e)}
-
-@app.get("/api/analytics/weak-points")
-async def analytics_weak_points(subject: Optional[str] = None):
-    """获取薄弱知识点诊断（可选按学科筛选）。"""
-    try:
-        points = await get_weak_points(subject)
-        return {"success": True, "data": points}
-    except Exception as e:
-        return {"success": False, "message": str(e)}
-
-@app.get("/api/analytics/trends")
-async def analytics_trends(subject: Optional[str] = None):
-    """获取学习趋势（按周汇总，可选按学科筛选）。"""
-    try:
-        trends = await get_trends(subject)
-        return {"success": True, "data": trends}
-    except Exception as e:
-        return {"success": False, "message": str(e)}
 
 # ---- Serve frontend static files (production) ----
 import os as _os
