@@ -15,7 +15,7 @@ def _get_client():
         _client = AipOcr(_APP_ID, _API_KEY, _SECRET_KEY)
     return _client
 
-async def ocr_image(image_bytes: bytes, mode: str = "accurate") -> str:
+async def ocr_image(image_bytes: bytes, mode: str = "handwriting") -> str:
     client = _get_client()
     if not client:
         return ""
