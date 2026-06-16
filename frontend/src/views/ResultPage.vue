@@ -93,9 +93,10 @@
 
           <template v-else-if="q.status==='partial_recognition'">
             <div class="card-header warn">第 {{ q.id }} 题 ⚠️ 题目不完整</div>
-            <div class="sub-hint">已识别片段：{{ q.content }}</div>
+            <div class="sub-hint">已识别内容：{{ q.content }}</div>
+            <div v-if="q.wrongReason || q.explanation" class="sub-hint explain-hint">{{ q.wrongReason || q.explanation }}</div>
             <div class="input-line">
-              <label>补全题目：</label>
+              <label>如需人工补全题目：</label>
               <input v-model="q.tempContent" class="small-input" />
             </div>
             <div class="actions-row">

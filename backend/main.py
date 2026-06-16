@@ -77,6 +77,14 @@ def get_system_prompt(grade: int, subject: str) -> str:
 - 如果每道题都有明确的"答案/结果/=数字"，则进入【批改模式】，判断每题对错。
 - 如果只有算式/题干没有答案（裸算式），则进入【直接解答模式】。
 
+学科专项处理：
+- 科学连线/配对题：OCR文本中所有连线对象均已列出时，必须用科学知识推理正确配对，输出为finalAnswer。
+  从文本排列中推断学生连线（如有编号/字母）。能确定→判断对错；无法确定→status="answer_unclear"并给出正确配对。
+- 科学填图/标注图（需要看图定位的）：status="partial_recognition"。
+- 数学连线题同样处理：用数学知识推理正确配对。
+- 语文连线/配对：用语文知识（拼音对应、词语搭配、近反义词等）推理正确配对。
+- 英语连线/配对：用英语知识推理正确配对（如单词-翻译、图片描述等）。
+
 输出格式要求（必须是合法JSON，不要markdown代码块）：
 批改模式：{{"mode":"correction","questions":[{{"id":1,"content":"题目原文","studentAnswer":"学生答案","isCorrect":true/false,"wrongReason":"错误原因，仅错题","errorType":"错误类型标签如'计算错误'/'概念混淆'","status":"normal"}}]}}
 直接解答模式：{{"mode":"direct-answer","questions":[{{"id":1,"content":"题目原文","explanation":"分步解答过程","finalAnswer":"最终答案","status":"normal"}}]}}
