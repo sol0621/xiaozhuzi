@@ -6,6 +6,7 @@
 # ///
 import os
 import json
+import asyncio
 import traceback
 from contextlib import asynccontextmanager
 from typing import List, Optional
@@ -118,23 +119,73 @@ def get_explain_prompt(grade: int, subject: str, question: str, student_answer: 
 若不需要多方法，methods可为空列表。"""
 
 # ---- LLM call helpers ----
-async def call_llm(system: str, user: str, temperature: float = 0.3) -> str:
-    """调用LLM，使用流式模式拼接完整响应（该API仅支持stream=True）。"""
+async def call_llm(system: str, user: str, temperature: float = 0.3, max_retries: int = 3) -> str:
+    """调用LLM，使用流式模式拼接完整响应（该API仅支持stream=True）。
+    自动重试处理14003(繁忙)和临时网络错误。"""
     if not llm_client:
         raise RuntimeError("LLM未配置，请检查环境变量LLM_BASE_URL和LLM_API_KEY")
-    stream = await llm_client.chat.completions.create(
-        model=LLM_MODEL,
-        messages=[{"role":"system","content":system},{"role":"user","content":user}],
-        temperature=temperature,
-        max_tokens=4096,
-        timeout=120.0,
-        stream=True,
-    )
-    chunks = []
-    async for chunk in stream:
-        if chunk.choices and chunk.choices[0].delta.content:
-            chunks.append(chunk.choices[0].delta.content)
-    return "".join(chunks)
+
+    last_error = None
+    for attempt in range(max_retries):
+        try:
+            stream = await llm_client.chat.completions.create(
+                model=LLM_MODEL,
+                messages=[{"role":"system","content":system},{"role":"user","content":user}],
+                temperature=temperature,
+                max_tokens=4096,
+                timeout=120.0,
+                stream=True,
+            )
+            chunks = []
+            async for chunk in stream:
+                if chunk.choices and chunk.choices[0].delta.content:
+                    chunks.append(chunk.choices[0].delta.content)
+            return "".join(chunks)
+        except Exception as e:
+            last_error = e
+            err_str = str(e)
+
+            # 解析 LLM 返回的 code/message（如 14003 模型繁忙）
+            friendly_msg = err_str
+            try:
+                # 尝试从错误信息中提取 JSON
+                if "{" in err_str:
+                    # 找最内层的 JSON 对象
+                    import re as _re
+                    matches = _re.findall(r'\{[^{}]*"code":\s*\d+[^{}]*\}', err_str)
+                    for m in matches:
+                        err_data = json.loads(m)
+                        if err_data.get("code") and err_data.get("msg"):
+                            friendly_msg = f"[{err_data['code']}] {err_data['msg']}"
+                            break
+            except Exception:
+                pass
+
+            # 可重试的错误：14003(繁忙)、超时、连接错误
+            is_retryable = (
+                "14003" in err_str or
+                "服务繁忙" in err_str or
+                "模型服务繁忙" in err_str or
+                "timeout" in err_str.lower() or
+                "timed out" in err_str.lower() or
+                "connection" in err_str.lower() or
+                "Service Unavailable" in err_str or
+                "503" in err_str or
+                "502" in err_str
+            )
+
+            if is_retryable and attempt < max_retries - 1:
+                wait = 2 ** attempt  # 1s, 2s, 4s
+                print(f"[LLM] 第{attempt+1}次调用失败({friendly_msg})，{wait}秒后重试...")
+                await asyncio.sleep(wait)
+                continue
+
+            # 不可重试或已达上限
+            if attempt > 0:
+                print(f"[LLM] 重试{max_retries}次后仍失败: {friendly_msg}")
+            raise RuntimeError(f"AI服务调用失败：{friendly_msg}") from e
+
+    raise RuntimeError(f"AI服务调用失败（已重试{max_retries}次）：{str(last_error)}")
 
 def safe_json_parse(text: str):
     t = text.strip()
@@ -198,7 +249,17 @@ async def correct(
     try:
         raw = await call_llm(system, user, temperature=0.2)
     except Exception as e:
-        return {"success": True, "data": {"mode": "ai_error", "errorType": "LLM调用失败", "rawText": str(e)}}
+        err_msg = str(e)
+        # 提取用户友好的错误信息
+        if "LLM未配置" in err_msg:
+            error_type = "AI服务未配置"
+        elif "14003" in err_msg or "繁忙" in err_msg:
+            error_type = "AI服务繁忙"
+        elif "timeout" in err_msg.lower() or "超时" in err_msg:
+            error_type = "AI服务超时"
+        else:
+            error_type = "AI服务异常"
+        return {"success": True, "data": {"mode": "ai_error", "errorType": error_type, "rawText": err_msg}}
 
     data = safe_json_parse(raw)
     if not data or not isinstance(data, dict):
