@@ -294,7 +294,7 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.mistake-page { min-height: 100vh; padding-bottom: 80px; background: #f8f9fa; }
+.mistake-page { min-height: 100vh; background: #f8f9fa; }
 .nav-bar { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; background: #fff; border-bottom: 1px solid #eee; position: sticky; top: 0; z-index: 10; }
 .back { color: #4A90D9; font-size: 14px; cursor: pointer; }
 .title { font-size: 16px; font-weight: 600; }
@@ -351,4 +351,16 @@ onMounted(() => {
 .btn-explain-all { width: 100%; padding: 12px; background: linear-gradient(135deg, #667EEA, #764BA2); color: #fff; border: none; border-radius: 10px; font-size: 15px; font-weight: 600; cursor: pointer; box-shadow: 0 2px 8px rgba(102,126,234,0.3); }
 .pc-actions { margin-top: 10px; display: flex; gap: 8px; }
 .btn-explain { padding: 6px 14px; background: #E8F2FC; color: #4A90D9; border: 1px solid #B8D4F0; border-radius: 6px; font-size: 12px; cursor: pointer; }
+
+@media (max-width: 480px) {
+  .overview { padding: 12px; gap: 8px; }
+  .ov-item { padding: 10px; }
+  .ov-num { font-size: 20px; }
+  .filters { padding: 0 12px 8px; flex-direction: column; }
+  .problem-list { padding: 0 12px; gap: 8px; }
+  .problem-card { padding: 12px; }
+  .pc-question { font-size: 13px; }
+  .pc-row { gap: 8px; font-size: 12px; }
+  .nav-bar { padding: 10px 12px; }
+}
 </style>

@@ -222,5 +222,14 @@ function severityClass(level) {
   .overview-cards { grid-template-columns: repeat(2, 1fr); }
   .two-col { grid-template-columns: 1fr; }
   .bar-label { width: 60px; font-size: 0.72em; }
+  .analytics-page { padding: 12px; }
+  .subject-grid { grid-template-columns: repeat(2, 1fr); }
+  .card { padding: 12px; }
+  .card-num { font-size: 1.4em; }
+}
+@media (max-width: 480px) {
+  .overview-cards { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .bar-label { width: 50px; }
+  .top-bar h1 { font-size: 1.1em; }
 }
 </style>

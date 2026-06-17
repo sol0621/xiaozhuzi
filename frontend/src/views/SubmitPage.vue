@@ -32,7 +32,7 @@
           <div class="camera-icon">📷</div>
           <div>点击选择图片（最多10张，每张≤10MB）</div>
         </div>
-        <input ref="fileInput" type="file" accept="image/*" multiple @change="onFilesChange" style="display:none;">
+        <input ref="fileInput" type="file" accept="image/*" capture="environment" multiple @change="onFilesChange" style="display:none;">
         <div v-if="uploadedImages.length" class="thumbnails">
           <div v-for="(img, idx) in uploadedImages" :key="idx" class="thumb">
             <img :src="img.preview" />
@@ -56,12 +56,6 @@
       <div class="loading-text">{{ loadingText }}</div>
     </div>
 
-    <!-- Bottom Nav -->
-    <nav class="bottom-nav">
-      <router-link to="/" class="nav-item active">🏠 批改</router-link>
-      <router-link to="/mistake-book" class="nav-item">📒 错题本</router-link>
-      <router-link to="/analytics" class="nav-item">📊 分析</router-link>
-    </nav>
   </div>
 </template>
 
@@ -157,7 +151,7 @@ onUnmounted(() => clearInterval(timer))
 </script>
 
 <style scoped>
-.submit-page { padding: 16px 16px 70px 16px; }
+.submit-page { padding: 16px 16px 20px 16px; }
 .header { font-size: 20px; font-weight: 700; color: #4A90D9; text-align: center; margin-bottom: 20px; display: flex; align-items: center; justify-content: center; gap: 8px; }
 .app-avatar { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; border: 2px solid #4A90D9; }
 .section { margin-bottom: 20px; }
@@ -187,8 +181,10 @@ textarea { width:100%; padding:12px; border:1px solid #ddd; border-radius:8px; f
 @keyframes spin { to { transform:rotate(360deg); } }
 .loading-text { color:#4A90D9; font-size:14px; }
 
-/* Bottom Navigation */
-.bottom-nav { display: flex; justify-content: space-around; align-items: center; position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 480px; background: #fff; border-top: 1px solid #eee; padding: 8px 0; z-index: 50; box-shadow: 0 -1px 4px rgba(0,0,0,0.04); }
-.nav-item { display: flex; flex-direction: column; align-items: center; gap: 2px; text-decoration: none; font-size: 11px; color: #999; padding: 4px 16px; }
-.nav-item.active { color: #4A90D9; font-weight: 600; }
+@media (max-width: 480px) {
+  .submit-page { padding: 12px 12px 20px 12px; }
+  .header { font-size: 17px; margin-bottom: 14px; }
+  .thumbnails { grid-template-columns: repeat(2, 1fr); }
+  .btn-primary { border-radius: 10px; padding: 14px; }
+}
 </style>

@@ -195,7 +195,19 @@ loadExplain()
 .tip-body { font-size:13px; color:#856404; line-height:1.6; }
 .final-box { background:#E6F4EA; color:#1E8E3E; padding:12px; border-radius:10px; font-size:15px; }
 .grade-hint { font-size:11px; color:#999; text-align:center; margin-top:8px; }
-.bottom-nav { position:fixed; bottom:0; left:0; right:0; max-width:480px; margin:0 auto; display:flex; gap:12px; padding:12px 16px; background:#fff; border-top:1px solid #eee; }
+.bottom-nav { display:flex; gap:12px; padding:12px 16px; background:#fff; border-top:1px solid #eee; margin-top: 16px; }
 .bottom-nav button { flex:1; padding:12px; background:#4A90D9; color:#fff; border:none; border-radius:10px; font-size:14px; cursor:pointer; }
 .bottom-nav button:disabled { background:#ccc; cursor:not-allowed; }
+
+@media (max-width: 480px) {
+  .content { padding: 12px; }
+  .nav-bar { padding: 10px 12px; }
+  .nav-bar .title { font-size: 15px; }
+  .question-card, .explain-card, .tip-box { padding: 12px; }
+  .q-body, .explain-body { font-size: 13px; }
+  .bottom-nav { padding: 10px 12px; }
+  .bottom-nav button { font-size: 13px; padding: 10px; }
+  .methods-tabs { gap: 4px; }
+  .methods-tabs button { font-size: 12px; padding: 8px 6px; }
+}
 </style>

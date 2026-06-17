@@ -266,7 +266,7 @@ function isMatchingQuestion(q) {
 .btn-small { flex:1; padding:8px; background:#4A90D9; color:#fff; border:none; border-radius:6px; font-size:13px; cursor:pointer; }
 .btn-small.ghost { background:#fff; color:#666; border:1px solid #ddd; }
 .btn-explain { padding:6px 14px; background:#E8F2FC; color:#4A90D9; border:1px solid #B8D4F0; border-radius:6px; font-size:12px; cursor:pointer; }
-.footer-action { position:fixed; bottom:0; left:0; right:0; max-width:480px; margin:0 auto; padding:12px 16px; background:#fff; border-top:1px solid #eee; }
+.footer-action { padding:12px 16px; background:#fff; border-top:1px solid #eee; margin-top: 16px; }
 .footer-action .btn-primary { width:100%; padding:14px; background:#4A90D9; color:#fff; border:none; border-radius:12px; font-size:16px; font-weight:600; cursor:pointer; }
 .footer-action .btn-primary:disabled { background:#ccc; cursor:not-allowed; }
 .footer-links { display: flex; justify-content: center; gap: 24px; padding: 16px; }
@@ -284,4 +284,19 @@ function isMatchingQuestion(q) {
 .btn-primary { padding:10px 20px; background:#4A90D9; color:#fff; border:none; border-radius:8px; font-size:14px; cursor:pointer; }
 .direct-mode .tip-bar { background:#E8F2FC; color:#4A90D9; padding:10px 16px; font-size:13px; margin-bottom:8px; }
 .sub-hint { font-size:12px; color:#999; margin-bottom:8px; }
+
+@media (max-width: 480px) {
+  .cards { padding: 8px 8px; gap: 8px; }
+  .card { padding: 12px; }
+  .question-content { font-size: 14px; }
+  .stats-bar { padding: 10px 12px; font-size: 13px; }
+  .nav-bar { padding: 10px 12px; }
+  .input-line { flex-direction: column; align-items: stretch; }
+  .actions-row { flex-wrap: wrap; }
+  .btn-small { font-size: 12px; padding: 8px 6px; }
+  .celebrate { padding: 20px 12px; }
+  .celebrate-emoji { font-size: 40px; }
+  .celebrate-title { font-size: 16px; }
+  .center-state { padding: 40px 16px; }
+}
 </style>
