@@ -32,7 +32,7 @@
           <div class="camera-icon">📷</div>
           <div>点击选择图片（最多10张，每张≤10MB）</div>
         </div>
-        <input ref="fileInput" type="file" accept="image/*" capture="environment" multiple @change="onFilesChange" style="display:none;">
+        <input ref="fileInput" type="file" accept="image/*" multiple @change="onFilesChange" style="display:none;">
         <div v-if="uploadedImages.length" class="thumbnails">
           <div v-for="(img, idx) in uploadedImages" :key="idx" class="thumb">
             <img :src="img.preview" />
