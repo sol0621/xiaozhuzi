@@ -7,6 +7,30 @@ const api = axios.create({
   timeout: 210000,  // 3.5分钟，覆盖Render冷启动(~60s)+OCR(~15s)+LLM(~30s)
 })
 
+// 全局请求拦截器：显示进度条
+api.interceptors.request.use(
+  (config) => {
+    if (window._progressBar) window._progressBar.start()
+    return config
+  },
+  (error) => {
+    if (window._progressBar) window._progressBar.error()
+    return Promise.reject(error)
+  }
+)
+
+// 全局响应拦截器：隐藏进度条
+api.interceptors.response.use(
+  (response) => {
+    if (window._progressBar) window._progressBar.done()
+    return response
+  },
+  (error) => {
+    if (window._progressBar) window._progressBar.error()
+    return Promise.reject(error)
+  }
+)
+
 export async function correctHomework(formData) {
   const res = await api.post('/correct', formData, {
     headers: { 'Content-Type': 'multipart/form-data' }

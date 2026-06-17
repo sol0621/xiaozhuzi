@@ -5,7 +5,24 @@
       <router-link to="/submit" class="nav-link">← 返回</router-link>
     </nav>
 
-    <div v-if="loading" class="loading">正在分析数据...</div>
+    <div v-if="loading" class="skeleton-area">
+      <!-- 总览卡片骨架 -->
+      <div class="skeleton-row">
+        <SkeletonBlock variant="card" width="22%" height="70px" />
+        <SkeletonBlock variant="card" width="22%" height="70px" />
+        <SkeletonBlock variant="card" width="22%" height="70px" />
+        <SkeletonBlock variant="card" width="22%" height="70px" />
+      </div>
+      <!-- 双栏 -->
+      <div class="skeleton-two-col">
+        <SkeletonBlock variant="card" width="100%" height="200px" />
+        <SkeletonBlock variant="card" width="100%" height="200px" />
+      </div>
+      <!-- 趋势 -->
+      <SkeletonBlock variant="card" width="100%" height="180px" />
+      <!-- 学科 -->
+      <SkeletonBlock variant="card" width="100%" height="120px" />
+    </div>
     <div v-else-if="error" class="error-msg">{{ error }}</div>
     <div v-else-if="!data" class="empty">暂无数据，请先批改作业</div>
 
@@ -102,6 +119,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { fetchAnalytics } from '../api'
+import SkeletonBlock from '@/components/SkeletonBlock.vue'
 
 const data = ref(null)
 const loading = ref(true)
@@ -137,6 +155,16 @@ function severityClass(level) {
 .nav-link { color: #667eea; text-decoration: none; font-size: 0.9em; }
 .loading, .error-msg, .empty { text-align: center; padding: 40px; color: #888; font-size: 1em; }
 .error-msg { color: #e74c3c; }
+
+/* 骨架屏 */
+.skeleton-area { padding: 16px; }
+.skeleton-row { display: flex; gap: 12px; margin-bottom: 16px; }
+.skeleton-row .skeleton-block { margin-bottom: 0; }
+.skeleton-two-col { display: flex; gap: 16px; margin-bottom: 16px; }
+.skeleton-two-col .skeleton-block { flex: 1; margin-bottom: 0; }
+@media (max-width: 640px) {
+  .skeleton-two-col { flex-direction: column; }
+}
 
 /* 总览卡片 */
 .overview-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }

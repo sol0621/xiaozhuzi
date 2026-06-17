@@ -46,8 +46,21 @@
       </select>
     </div>
 
-    <!-- 加载中 -->
-    <div v-if="loading" class="loading">加载中...</div>
+    <!-- 加载中 - 骨架屏 -->
+    <div v-if="loading" class="skeleton-area">
+      <!-- 概览骨架 -->
+      <div class="skeleton-row">
+        <SkeletonBlock variant="card" width="30%" height="60px" />
+        <SkeletonBlock variant="card" width="30%" height="60px" />
+        <SkeletonBlock variant="card" width="30%" height="60px" />
+      </div>
+      <!-- 筛选栏骨架 -->
+      <SkeletonBlock variant="text" width="100%" height="40px" />
+      <!-- 错题卡片骨架 -->
+      <SkeletonBlock variant="card" width="100%" height="120px" />
+      <SkeletonBlock variant="card" width="100%" height="120px" />
+      <SkeletonBlock variant="card" width="100%" height="120px" />
+    </div>
 
     <!-- 讲解全部按钮 -->
     <div v-if="problems.length > 0" class="explain-all-bar">
@@ -110,6 +123,7 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useHomeworkStore } from '@/stores/homework'
 import { fetchMistakeBook } from '@/api'
+import SkeletonBlock from '@/components/SkeletonBlock.vue'
 
 const router = useRouter()
 const store = useHomeworkStore()
@@ -297,6 +311,9 @@ onMounted(() => {
 .filters select { flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 8px; font-size: 13px; background: #fff; color: #333; }
 
 /* 加载/空 */
+.skeleton-area { padding: 16px; }
+.skeleton-row { display: flex; gap: 12px; margin-bottom: 8px; }
+.skeleton-row .skeleton-block { margin-bottom: 0; }
 .loading { text-align: center; padding: 60px 16px; color: #999; font-size: 14px; }
 .empty { text-align: center; padding: 60px 16px; }
 .empty-emoji { font-size: 48px; margin-bottom: 12px; }

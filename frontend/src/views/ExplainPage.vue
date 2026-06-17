@@ -6,7 +6,15 @@
       <span class="placeholder"></span>
     </div>
 
-    <div v-if="question" class="content">
+    <div v-if="loading" class="skeleton-area">
+      <SkeletonBlock variant="card" width="100%" height="80px" />
+      <SkeletonBlock variant="text" width="100%" height="12px" />
+      <SkeletonBlock variant="card" width="100%" height="160px" />
+      <SkeletonBlock variant="text" width="60%" height="12px" />
+      <SkeletonBlock variant="card" width="100%" height="60px" />
+    </div>
+
+    <div v-else-if="question" class="content">
       <div class="question-card">
         <div class="q-title">题目</div>
         <div class="q-body">{{ question.content }}</div>
@@ -55,6 +63,7 @@ import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useHomeworkStore } from '@/stores/homework'
 import { explainError } from '@/api'
+import SkeletonBlock from '@/components/SkeletonBlock.vue'
 
 const router = useRouter()
 const store = useHomeworkStore()
@@ -131,6 +140,7 @@ loadExplain()
 .placeholder { width:50px; }
 .content { padding:16px; display:flex; flex-direction:column; gap:12px; }
 .empty { padding:80px 24px; text-align:center; color:#999; font-size:14px; }
+.skeleton-area { padding: 16px; display: flex; flex-direction: column; gap: 4px; }
 .question-card { background:#fff; border-radius:10px; padding:14px; border-left:4px solid #F0AD4E; }
 .q-title { font-size:12px; color:#999; margin-bottom:6px; }
 .q-body { font-size:15px; font-weight:600; color:#333; line-height:1.5; }

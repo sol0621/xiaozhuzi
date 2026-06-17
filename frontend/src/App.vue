@@ -1,6 +1,14 @@
 <template>
+  <ProgressBar />
   <router-view />
 </template>
+
+<script setup>
+import ProgressBar from './components/ProgressBar.vue'
+import { useWakeLock } from './composables/useWakeLock'
+
+useWakeLock()
+</script>
 
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
