@@ -24,7 +24,7 @@ load_dotenv()
 from database import init_db, async_session
 from models import HomeworkRecord, ProblemRecord
 from ocr_service import ocr_images
-from sqlalchemy import func, select
+from sqlalchemy import func, select, and_
 
 # ---- LLM config ----
 LLM_BASE_URL = os.getenv("LLM_BASE_URL", "")
@@ -339,9 +339,9 @@ async def mistake_book(
                 conditions.append(ProblemRecord.error_type == error_type)
 
             # Join HomeworkRecord 获取 subject 和 grade
-            join_conditions = [ProblemRecord.homework_id == HomeworkRecord.id]
+            join_on = ProblemRecord.homework_id == HomeworkRecord.id
             if subject:
-                join_conditions.append(HomeworkRecord.subject == subject)
+                conditions.append(HomeworkRecord.subject == subject)
 
             # 日期筛选
             if start_date:
@@ -354,7 +354,7 @@ async def mistake_book(
             count_stmt = (
                 select(func.count(ProblemRecord.id))
                 .select_from(ProblemRecord)
-                .join(HomeworkRecord, *join_conditions)
+                .join(HomeworkRecord, join_on)
                 .where(and_(*conditions))
             )
             total = await session.scalar(count_stmt) or 0
@@ -363,7 +363,7 @@ async def mistake_book(
             stmt = (
                 select(ProblemRecord, HomeworkRecord.subject, HomeworkRecord.grade)
                 .select_from(ProblemRecord)
-                .join(HomeworkRecord, *join_conditions)
+                .join(HomeworkRecord, join_on)
                 .where(and_(*conditions))
                 .order_by(desc_(ProblemRecord.created_at))
                 .offset((page - 1) * page_size)
