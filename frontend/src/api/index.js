@@ -4,7 +4,7 @@ const API_BASE = import.meta.env.VITE_API_BASE || '/api'
 
 const api = axios.create({
   baseURL: API_BASE,
-  timeout: 120000,
+  timeout: 210000,  // 3.5分钟，覆盖Render冷启动(~60s)+OCR(~15s)+LLM(~30s)
 })
 
 export async function correctHomework(formData) {

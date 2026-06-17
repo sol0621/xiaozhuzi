@@ -108,6 +108,11 @@ def get_explain_prompt(grade: int, subject: str, question: str, student_answer: 
 正确答案：{correct_answer}
 判题发现的错因：{wrong_reason}
 
+【关键要求】
+1. 数学题必须用分步算式验证：一步一步推导，每一步都写出具体的算式和结果，最后验证是否与正确答案[{correct_answer}]一致。
+2. 如果计算结果与[{correct_answer}]不符，必须重新检查每一步，找到错误并修正。
+3. 不要盲目相信正确答案——如果经过验证发现它也可能是错的，在tip中提醒。
+
 请输出如下JSON（不要markdown代码块）：
 {{"explanation":"详细步骤...","methods":[{{"name":"方法1","content":"步骤..."}}],"tip":"易错点一句话","finalAnswer":"正确答案"}}
 若不需要多方法，methods可为空列表。"""

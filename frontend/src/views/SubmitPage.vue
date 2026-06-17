@@ -140,7 +140,14 @@ async function submit() {
     store.setResult(res.data)
     router.push('/result')
   } catch (err) {
-    alert('提交失败：' + (err.response?.data?.message || err.message))
+    const msg = err.response?.data?.message || err.message || ''
+    if (err.code === 'ECONNABORTED' || msg.includes('timeout')) {
+      alert('请求超时，服务器可能正在冷启动（约需30-60秒），请稍后重试。')
+    } else if (err.code === 'ERR_NETWORK' || msg.includes('Network Error')) {
+      alert('网络连接失败。可能是服务器正在启动中，请等待1分钟后重试。\n\n若持续失败，请检查网络或联系技术支持。')
+    } else {
+      alert('提交失败：' + (msg || '未知错误'))
+    }
   } finally {
     loading.value = false
     clearInterval(timer)

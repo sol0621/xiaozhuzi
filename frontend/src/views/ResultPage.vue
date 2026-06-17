@@ -55,6 +55,9 @@
             <div class="explanation-text" v-html="formatText(q.explanation)"></div>
             <div class="final-answer">答案：{{ q.finalAnswer }}</div>
           </div>
+          <div class="card-actions" style="margin-top:8px; display:flex; gap:8px;">
+            <button class="btn-explain" @click="goExplain(q)">💡 详细讲解</button>
+          </div>
         </div>
       </div>
     </div>
@@ -262,6 +265,7 @@ function isMatchingQuestion(q) {
 .actions-row { display:flex; gap:8px; margin-top:8px; }
 .btn-small { flex:1; padding:8px; background:#4A90D9; color:#fff; border:none; border-radius:6px; font-size:13px; cursor:pointer; }
 .btn-small.ghost { background:#fff; color:#666; border:1px solid #ddd; }
+.btn-explain { padding:6px 14px; background:#E8F2FC; color:#4A90D9; border:1px solid #B8D4F0; border-radius:6px; font-size:12px; cursor:pointer; }
 .footer-action { position:fixed; bottom:0; left:0; right:0; max-width:480px; margin:0 auto; padding:12px 16px; background:#fff; border-top:1px solid #eee; }
 .footer-action .btn-primary { width:100%; padding:14px; background:#4A90D9; color:#fff; border:none; border-radius:12px; font-size:16px; font-weight:600; cursor:pointer; }
 .footer-action .btn-primary:disabled { background:#ccc; cursor:not-allowed; }
