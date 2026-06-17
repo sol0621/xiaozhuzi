@@ -225,6 +225,14 @@ async def correct(
     textContent: Optional[str] = Form(None),
     images: List[UploadFile] = File(default=[]),
 ):
+    try:
+        return await _do_correct(grade, subject, inputMode, textContent, images)
+    except Exception as e:
+        print(f"[CRASH] /api/correct 未捕获异常: {e}")
+        traceback.print_exc()
+        return {"success": False, "message": f"服务内部错误，请稍后重试。错误类型：{type(e).__name__}"}
+
+async def _do_correct(grade: int, subject: str, inputMode: str, textContent: Optional[str], images: List[UploadFile]):
     texts = []
     if textContent:
         texts.append(textContent)
@@ -232,12 +240,22 @@ async def correct(
     if inputMode == "photo" and images:
         image_bytes = []
         for img in images:
-            content = await img.read()
-            if content: image_bytes.append(content)
+            try:
+                content = await img.read()
+                if content: image_bytes.append(content)
+            except Exception as e:
+                print(f"读取图片失败: {e}")
+                continue
         if ENABLE_OCR and image_bytes:
-            ocr_text = await ocr_images(image_bytes)
-            if ocr_text:
-                texts.append(ocr_text)
+            try:
+                ocr_text = await ocr_images(image_bytes)
+                if ocr_text:
+                    texts.append(ocr_text)
+            except Exception as e:
+                print(f"OCR识别失败: {e}")
+                traceback.print_exc()
+                # OCR失败不阻断，返回提示
+                return {"success": False, "message": f"图片识别失败：{str(e)[:200]}"}
 
     if not texts:
         return {"success": False, "message": "没有识别到任何内容，请检查输入或图片"}

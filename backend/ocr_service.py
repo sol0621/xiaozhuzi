@@ -28,13 +28,19 @@ def _preprocess_image(image_bytes: bytes) -> Tuple[bytes, bytes]:
     """
     img = Image.open(io.BytesIO(image_bytes))
 
-    # 1. 小图自动放大
+    # 1. 尺寸处理：小图放大，大图缩小
     w, h = img.size
     scale = 2
     if max(w, h) < 800:
         scale = 4  # 极小的图放大4倍
     elif max(w, h) < 1600:
         scale = 3  # 中等图放大3倍（提高√×等小符号分辨率）
+    # 大图缩小：避免OOM和API超时
+    MAX_PIXELS = 4000  # 最大边长
+    if max(w, h) > MAX_PIXELS:
+        ratio = MAX_PIXELS / max(w, h)
+        w, h = int(w * ratio), int(h * ratio)
+        img = img.resize((w, h), Image.LANCZOS)
     if scale > 1:
         img = img.resize((w * scale, h * scale), Image.LANCZOS)
         w, h = img.size
