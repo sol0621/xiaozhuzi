@@ -22,6 +22,22 @@
         <div v-else-if="question.correctAnswer" class="q-wrong">答案：{{ question.correctAnswer }}</div>
       </div>
 
+      <!-- 语音播报 -->
+      <VoicePlayer
+        :isPlaying="tts.isPlaying.value"
+        :isPaused="tts.isPaused.value"
+        :currentSegment="tts.currentSegmentIndex.value"
+        :totalSegments="tts.totalSegments.value"
+        :rate="tts.rate.value"
+        :isSupported="tts.isSupported.value"
+        :error="tts.error.value"
+        @play="startTTS"
+        @pause="tts.pause"
+        @resume="tts.resume"
+        @stop="tts.stop"
+        @setRate="tts.setRate"
+      />
+
       <!-- 数学多方法 Tab -->
       <div v-if="subject==='math' && explanation?.methods?.length" class="methods-tabs">
         <button
@@ -59,11 +75,13 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useHomeworkStore } from '@/stores/homework'
 import { explainError } from '@/api'
 import SkeletonBlock from '@/components/SkeletonBlock.vue'
+import VoicePlayer from '@/components/VoicePlayer.vue'
+import { useTTS } from '@/composables/useTTS'
 
 const router = useRouter()
 const store = useHomeworkStore()
@@ -115,6 +133,27 @@ const currentExplanation = computed(() => {
 })
 
 function formatText(t) { return (t || '').replace(/\n/g, '<br>') }
+
+// TTS 语音播报
+const tts = useTTS()
+
+function stripHtml(html) {
+  return (html || '').replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]*>/g, '').trim()
+}
+
+function startTTS() {
+  const text = stripHtml(currentExplanation.value)
+  // 拼接易错点提醒和正确答案，让播报更完整
+  let full = text
+  if (explanation.value?.tip) full += '\n\n易错点提醒：' + explanation.value.tip
+  if (explanation.value?.finalAnswer) full += '\n\n正确答案是：' + explanation.value.finalAnswer
+  tts.play(full)
+}
+
+// 数学多方法切换或上下题切换时停止播报
+watch([activeMethod, question], () => {
+  tts.stop()
+})
 
 function prev() {
   if (currentIndex.value > 0) {
