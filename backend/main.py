@@ -27,6 +27,14 @@ from models import HomeworkRecord, ProblemRecord
 from ocr_service import ocr_images
 from sqlalchemy import func, select, and_
 
+# 确定性引擎（v2.0 数学100%准确判题）
+try:
+    from deterministic_engine.deterministic_router import get_router as get_det_router
+    _DET_ENGINE_AVAILABLE = True
+except Exception as e:
+    print(f"[DET] 确定性引擎加载失败: {e}")
+    _DET_ENGINE_AVAILABLE = False
+
 # ---- LLM config ----
 LLM_BASE_URL = os.getenv("LLM_BASE_URL", "")
 LLM_API_KEY = os.getenv("LLM_API_KEY", "")
@@ -346,6 +354,26 @@ class ExplainRequest(BaseModel):
 @app.post("/api/explain")
 async def explain(req: ExplainRequest):
     try:
+        # ── v2.1: 全学科优先走确定性引擎 ──
+        if _DET_ENGINE_AVAILABLE:
+            try:
+                router = get_det_router()
+                if router.can_handle(req.question, req.subject, req.grade):
+                    det_result = router.explain(
+                        req.question, req.grade, req.subject,
+                        student_answer=req.studentAnswer or "",
+                        correct_answer=req.correctAnswer,
+                        wrong_reason=req.wrongReason or "",
+                    )
+                    if det_result and det_result.get("confidence") in ("high", "medium"):
+                        print(f"[DET] 确定性引擎讲解成功 [{req.subject}]: {det_result.get('knowledgePoint', {}).get('name', 'unknown')}")
+                        return {"success": True, "data": det_result}
+                    # 低置信度或失败 → 回退LLM
+                    print(f"[DET] 确定性引擎无法处理或低置信度 [{req.subject}]，回退LLM")
+            except Exception as det_err:
+                print(f"[DET] 确定性引擎异常，回退LLM: {det_err}")
+
+        # ── LLM 回退（原逻辑）──
         system = get_explain_prompt(req.grade, req.subject, req.question, req.studentAnswer or "", req.correctAnswer or "", req.wrongReason or "")
         raw = await call_llm(system, "请按格式输出讲解。", temperature=0.4)
         data = safe_json_parse(raw)
