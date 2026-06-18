@@ -54,6 +54,17 @@
     <div v-if="loading" class="loading-mask">
       <div class="spinner"></div>
       <div class="loading-text">{{ loadingText }}</div>
+      <div v-if="retryCount > 0" class="retry-hint">自动重试中 ({{ retryCount }}/3)…</div>
+    </div>
+
+    <div v-if="errorMessage" class="error-banner">
+      <div class="error-icon">⚠️</div>
+      <div class="error-body">
+        <div class="error-title">提交失败</div>
+        <div class="error-detail">{{ errorMessage }}</div>
+      </div>
+      <button class="error-retry" @click="submit">重试</button>
+      <button class="error-close" @click="errorMessage=''">✕</button>
     </div>
 
   </div>
@@ -76,6 +87,8 @@ const uploadedImages = ref([])
 const fileInput = ref(null)
 const loading = ref(false)
 const loadingText = ref('AI正在读取作业，请稍候…')
+const errorMessage = ref('')
+const retryCount = ref(0)
 let timer = null
 
 const subjects = [
@@ -111,41 +124,66 @@ function removeImage(idx) { uploadedImages.value.splice(idx, 1) }
 
 async function submit() {
   if (!canSubmit.value) return
+  errorMessage.value = ''
+  retryCount.value = 0
   loading.value = true
+
   const hints = ['AI正在读取作业，请稍候…','正在逐题判断对错…','正在整理结果…']
   let i = 0
   loadingText.value = hints[0]
   timer = setInterval(() => { i = (i+1)%hints.length; loadingText.value = hints[i] }, 3000)
 
-  try {
-    const fd = new FormData()
-    fd.append('grade', grade.value)
-    fd.append('subject', subject.value)
-    fd.append('inputMode', inputMode.value)
-    if (inputMode.value === 'text') fd.append('textContent', textContent.value)
-    else uploadedImages.value.forEach(img => fd.append('images', img.file))
+  const MAX_RETRIES = 3
+  const RETRY_DELAYS = [5000, 10000, 15000]
 
-    const res = await correctHomework(fd)
-    store.grade = grade.value
-    store.subject = subject.value
-    store.inputMode = inputMode.value
-    store.textContent = textContent.value
-    store.uploadedImages = uploadedImages.value
-    store.setResult(res.data)
-    router.push('/result')
-  } catch (err) {
-    const msg = err.response?.data?.message || err.message || ''
-    if (err.code === 'ECONNABORTED' || msg.includes('timeout')) {
-      alert('请求超时，服务器可能正在冷启动（约需30-60秒），请稍后重试。')
-    } else if (err.code === 'ERR_NETWORK' || msg.includes('Network Error')) {
-      alert('网络连接失败。可能是服务器正在启动中，请等待1分钟后重试。\n\n若持续失败，请检查网络或联系技术支持。')
-    } else {
-      alert('提交失败：' + (msg || '未知错误'))
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    if (attempt > 0) {
+      retryCount.value = attempt
+      loadingText.value = `正在重新连接服务器…`
     }
-  } finally {
-    loading.value = false
-    clearInterval(timer)
+
+    try {
+      const fd = new FormData()
+      fd.append('grade', grade.value)
+      fd.append('subject', subject.value)
+      fd.append('inputMode', inputMode.value)
+      if (inputMode.value === 'text') fd.append('textContent', textContent.value)
+      else uploadedImages.value.forEach(img => fd.append('images', img.file))
+
+      const res = await correctHomework(fd)
+      store.grade = grade.value
+      store.subject = subject.value
+      store.inputMode = inputMode.value
+      store.textContent = textContent.value
+      store.uploadedImages = uploadedImages.value
+      store.setResult(res.data)
+      router.push('/result')
+      return
+    } catch (err) {
+      const msg = err.response?.data?.message || err.message || ''
+      const isTimeout = err.code === 'ECONNABORTED' || msg.includes('timeout')
+      const isNetwork = err.code === 'ERR_NETWORK' || msg.includes('Network Error')
+
+      // 网络/超时错误且还有重试次数 → 自动重试
+      if ((isTimeout || isNetwork) && attempt < MAX_RETRIES) {
+        await new Promise(r => setTimeout(r, RETRY_DELAYS[attempt]))
+        continue
+      }
+
+      // 最终失败 → 显示内联错误
+      if (isTimeout) {
+        errorMessage.value = '请求超时，服务器可能正在冷启动（约需30-60秒），请稍后重试。'
+      } else if (isNetwork) {
+        errorMessage.value = '网络连接失败。可能是服务器正在启动中，请等待1分钟后重试。若持续失败，请检查网络或联系技术支持。'
+      } else {
+        errorMessage.value = msg || '未知错误'
+      }
+      break
+    }
   }
+
+  loading.value = false
+  clearInterval(timer)
 }
 onUnmounted(() => clearInterval(timer))
 </script>
@@ -180,6 +218,15 @@ textarea { width:100%; padding:12px; border:1px solid #ddd; border-radius:8px; f
 .spinner { width:40px; height:40px; border:4px solid #eee; border-top-color:#4A90D9; border-radius:50%; animation:spin 1s linear infinite; margin-bottom:16px; }
 @keyframes spin { to { transform:rotate(360deg); } }
 .loading-text { color:#4A90D9; font-size:14px; }
+.retry-hint { color:#ff9800; font-size:12px; margin-top:8px; }
+
+.error-banner { display:flex; align-items:flex-start; gap:10px; padding:14px; background:#fff3f0; border:1px solid #ffccc7; border-radius:10px; margin-top:12px; position:relative; }
+.error-icon { font-size:18px; flex-shrink:0; }
+.error-body { flex:1; min-width:0; }
+.error-title { font-weight:600; color:#ff4d4f; font-size:14px; margin-bottom:4px; }
+.error-detail { font-size:13px; color:#666; line-height:1.5; word-break:break-all; }
+.error-retry { padding:6px 16px; background:#4A90D9; color:#fff; border:none; border-radius:6px; font-size:13px; cursor:pointer; flex-shrink:0; align-self:center; }
+.error-close { position:absolute; top:6px; right:10px; background:none; border:none; font-size:16px; color:#999; cursor:pointer; padding:2px 6px; }
 
 @media (max-width: 480px) {
   .submit-page { padding: 12px 12px 20px 12px; }
