@@ -28,22 +28,30 @@ def _preprocess_image(image_bytes: bytes) -> Tuple[bytes, bytes]:
     """
     img = Image.open(io.BytesIO(image_bytes))
 
-    # 1. 尺寸处理：小图放大，大图缩小
+    # 1. 尺寸处理：小图适当放大，但最终不超过 MAX_PIXELS 硬上限
     w, h = img.size
-    scale = 2
-    if max(w, h) < 800:
-        scale = 4  # 极小的图放大4倍
-    elif max(w, h) < 1600:
-        scale = 3  # 中等图放大3倍（提高√×等小符号分辨率）
-    # 大图缩小：避免OOM和API超时
-    MAX_PIXELS = 4000  # 最大边长
-    if max(w, h) > MAX_PIXELS:
-        ratio = MAX_PIXELS / max(w, h)
+    max_dim = max(w, h)
+
+    # 决定目标放大倍率（极小图片需要放大以提高 OCR 精度）
+    if max_dim < 800:
+        target_scale = 4
+    elif max_dim < 1600:
+        target_scale = 3
+    else:
+        target_scale = 2
+
+    # 计算预估放大后尺寸
+    MAX_PIXELS = 3000  # 最终像素硬上限（Render 512MB 实例安全值）
+    new_max = max_dim * target_scale
+
+    if new_max > MAX_PIXELS:
+        # 放大后会超限 → 直接缩放到 MAX_PIXELS
+        ratio = MAX_PIXELS / max_dim
         w, h = int(w * ratio), int(h * ratio)
-        img = img.resize((w, h), Image.LANCZOS)
-    if scale > 1:
-        img = img.resize((w * scale, h * scale), Image.LANCZOS)
-        w, h = img.size
+    else:
+        w, h = w * target_scale, h * target_scale
+
+    img = img.resize((w, h), Image.LANCZOS)
 
     # 2. 转灰度
     if img.mode != "L":
@@ -67,8 +75,13 @@ def _preprocess_image(image_bytes: bytes) -> Tuple[bytes, bytes]:
     version_b = out_b.getvalue()
 
     # ---- 版本A：Otsu二值化版（手写文字最清晰） ----
-    arr = np.array(enhanced, dtype=np.uint8)
-    hist, _ = np.histogram(arr.ravel(), 256, [0, 256])
+    try:
+        arr = np.array(enhanced, dtype=np.uint8)
+        hist, _ = np.histogram(arr.ravel(), 256, [0, 256])
+    except MemoryError:
+        # OOM 时回退：版本A直接复用灰度增强版
+        print("Otsu binarization OOM, falling back to grayscale version")
+        return version_b, version_b
     total = arr.size
     sum_all = np.dot(np.arange(256), hist)
     weight_bg = 0
